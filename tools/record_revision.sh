@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# =============================================================================
+# record_revision.sh - 固化交付代码的 revision 与逐文件校验值
+#
+# 背景：验收标准 §8.1 要求「保留该版本的代码 revision」，§9 要求提交材料可核对。
+#       本脚本在远程工作目录内建一个**只含交付物**的 git 仓库（不 push、不联网），
+#       产出：
+#         1) .revision            —— 交付代码 revision（commit hash + 时间 + 文件数）
+#         2) submission/MANIFEST.sha256 —— 提交包每个文件的 sha256
+#       两者都可被第三方独立复核，替代「口头声称没改过」。
+#
+# 两阶段（避免「revision 笔记本身又改变 revision」的自指问题）：
+#   阶段 A（默认）  : git init -> 提交交付物 = **交付代码 revision** -> 生成校验清单
+#   阶段 B(--finalize): 在 inject_revision.py 把 revision 写进报告/README 之后，
+#                      再提交一次（只含 revision 笔记），记录为 `revision_note_commit`。
+#
+# 只纳入交付物目录；envs/pylibs（隔离依赖）、cache/、tmp/、outputs/、logs/ 不进仓库。
+#
+# 用法: bash tools/record_revision.sh [--finalize]
+# =============================================================================
+set -uo pipefail
+W=/root/private_data/workspace/robo
+cd "$W" || exit 1
+
+GITDIR="$W/.git"
+DELIVERABLES="submission scripts tools configs samples patches reports platform"
+FINALIZE=0
+[ "${1:-}" = "--finalize" ] && FINALIZE=1
+
+cat > "$W/.gitignore" <<'EOF'
+# 隔离依赖与运行产物：不进交付仓库（体积大、可由脚本重新生成）
+envs/pylibs/
+cache/
+tmp/
+outputs/
+logs/
+*.pyc
+__pycache__/
+EOF
+
+if [ ! -d "$GITDIR" ]; then
+  git init -q "$W" || { echo "[rev] git init failed"; exit 1; }
+  git -C "$W" config user.email "robo-adaptation@local"
+  git -C "$W" config user.name "RoboBrain2.5-8B-NV adaptation"
+fi
+
+commit_all() {
+  local msg="$1"
+  git -C "$W" add -A -- $DELIVERABLES 2>/dev/null
+  git -C "$W" add -f .gitignore 2>/dev/null
+  if git -C "$W" diff --cached --quiet; then
+    echo "[rev] nothing new to commit"
+    return 0
+  fi
+  git -C "$W" commit -q -m "$msg" || { echo "[rev] commit failed"; return 1; }
+  return 0
+}
+
+if [ "$FINALIZE" = "0" ]; then
+  commit_all "RoboBrain2.5-8B-NV on K100AI (K500SM_AI): vLLM 0.15.1 BF16 submission package" || exit 1
+
+  HASH=$(git -C "$W" rev-parse HEAD)
+  SHORT=$(git -C "$W" rev-parse --short HEAD)
+  NFILES=$(git -C "$W" ls-tree -r --name-only HEAD | wc -l)
+  NOW=$(date -Is)
+
+  MAN="$W/submission/MANIFEST.sha256"
+  ( cd "$W/submission" && find . -type f ! -name 'MANIFEST.sha256' -print0 \
+    | sort -z | xargs -0 sha256sum ) > "$MAN"
+
+  cat > "$W/.revision" <<EOF
+# RoboBrain2.5-8B-NV / K100AI (K500SM_AI) 交付 revision
+revision      = ${HASH}
+revision_short= ${SHORT}
+recorded_at   = ${NOW}
+tracked_files = ${NFILES}
+manifest      = submission/MANIFEST.sha256
+repo_layout   = ${DELIVERABLES}
+note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs、logs 未纳入
+                 （隔离依赖与运行产物，可由提交包脚本重新生成）。
+                 托管平台链接与 revision 仍需由用户上传后回填
+                 （PDF 要求代码与镜像分别提交到指定托管平台）。
+EOF
+  echo "[rev] revision      = ${HASH}"
+  echo "[rev] tracked_files = ${NFILES}"
+  echo "[rev] manifest      = submission/MANIFEST.sha256 ($(wc -l < "$MAN") files)"
+  echo "[rev] .revision written (阶段 A 完成；跑 inject_revision.py 后再执行 --finalize)"
+else
+  # 阶段 B：revision 笔记已写进报告与 README，提交之
+  commit_all "docs: record delivery revision $(git -C "$W" rev-parse --short HEAD 2>/dev/null || echo '')" || exit 1
+  NOTE=$(git -C "$W" rev-parse HEAD)
+  SHORTNOTE=$(git -C "$W" rev-parse --short HEAD)
+  # 把笔记 commit 追加进 .revision
+  if [ -f "$W/.revision" ]; then
+    printf 'revision_note_commit= %s\nrevision_note_short = %s\n' "$NOTE" "$SHORTNOTE" >> "$W/.revision"
+  fi
+  echo "[rev] revision_note_commit = ${NOTE}"
+  git -C "$W" log --oneline -3 | sed 's/^/[rev] /'
+fi

@@ -1,0 +1,373 @@
+# 运行手册与故障恢复指南（RoboBrain2.5-8B-NV / K100AI）
+
+> 工作目录（远端，持久盘）：`/root/private_data/workspace/robo`
+> 模型目录（远端，只读）：`/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV`
+> 节点：单卡 K100AI（`K500SM_AI` / `gfx928` / 63.98 GiB），DTK 26.04，torch 2.9.0，transformers 5.3.0
+> 连接：`ssh dcu_1026`（别名：HostName ksai.scnet.cn / Port 10312 / User root）
+
+---
+
+## 0. 一分钟版
+
+```bash
+ssh dcu_1026
+cd /root/private_data/workspace/robo
+source ./env.sh                       # 内部已 source /opt/dtk/env.sh 与 /opt/hyhal/env.sh
+python3 scripts/minimal_inference.py \
+  --image samples/images/official_affordance.jpg \
+  --prompt "What is shown in this image?" \
+  --max-new-tokens 64 --repeat 2 --out-dir outputs/phase2
+```
+
+预期：`VERDICT PASS`，两次输出逐字符相同，峰值显存 ≈ 16.53 GiB。
+
+---
+
+## 1. 环境自检（每次新会话先跑这 5 条）
+
+```bash
+cd /root/private_data/workspace/robo
+source ./env.sh
+hostname                                    # 期望 crdnotebook-...-scnjz2s4uc-68757
+/opt/hyhal/bin/hy-smi                      # 期望 HCU[0] 1 张，VRAM 0%，Normal
+python3 -c "import torch; p=torch.cuda.get_device_properties(0); \
+print(p.name, p.gcnArchName, p.major, p.minor, round(p.total_memory/1024**3,2))"
+# 期望: K500SM_AI gfx928:sramecc+:xnack- 9 2 63.98
+python3 -c "import qwen_vl_utils, transformers, torch; \
+print('qwen_vl_utils', qwen_vl_utils.__version__, '| transformers', transformers.__version__, '| torch', torch.__version__)"
+```
+
+> **坑**：`torch` 直接 import 会报 `ImportError: libgalaxyhip.so.5` —— 必须先 `source ./env.sh`
+> （它内部 `source /opt/dtk/env.sh`）。`hy-smi` 不在默认 PATH，要用 `/opt/hyhal/bin/hy-smi`。
+
+### 1.1 容器联网（2026-10-27 更正：此前"节点无外网"的结论是错的）
+
+平台在**家目录**自动生成出口代理配置。联网指南写的 `~/.ai_user_info/ai_proxy` 在本容器**不存在**
+（root 的 `$HOME` 是 `/root`，而家目录挂载点是 `/public/home/scnjz2s4uc`）。实际路径：
+
+```
+/root/private_data/.ai_user_info/ai_proxy        # = /public/home/scnjz2s4uc/.ai_user_info/ai_proxy
+```
+
+已固化为 `tools/env_net.sh`（一次 source 同时得到 DCU 运行时与平台代理）：
+
+```bash
+source /root/private_data/workspace/robo/tools/env_net.sh
+# 验证
+env | grep -iE '^(http|https|ftp|no)_proxy' | cut -d= -f1     # 应有 4 个键名
+curl -sS -m 20 -o /dev/null -w '%{http_code}\n' https://www.scnet.cn/
+python3 -c "import torch;print(torch.__version__, torch.version.hip, torch.cuda.is_available())"
+```
+
+实测（2026-10-27 source 后）：`www.scnet.cn` 301、`gitlab.scnet.cn:9002` 302、
+`developer.sourcefind.cn` 200、`huggingface.co` 200、`pypi.tuna.tsinghua.edu.cn` 200；
+`torch 2.9.0 | hip 6.3.26113 | cuda_avail True`。
+
+> **凭据纪律**：代理文件含明文口令，**只 source 不打印**，不写进任何脚本、日志、报告或提交物。
+>
+> **本次变更的影响**：`bench.sh` 里"节点无外网"导致的那条 workaround **仍然需要**——
+> 官方压测客户端用 `--served-model-name`（服务名，不是路径）去 `AutoProcessor.from_pretrained()`，
+> 而服务名不是 HF 上的真实 repo，联网也解析不出来，仍需在 `$HF_HOME/hub/` 建只读软链接指向本地权重。
+
+---
+
+## 2. Pod 重启 / SSH 断连后的恢复流程
+
+超算互联网的 notebook 实例重启时，**`/root/private_data/` 是持久盘，工作目录与 `envs/` 里的离线依赖都会保留**；
+`/public` 模型目录只读共享也会保留。丢失的只有运行中的进程和 `cache/`、`tmp/` 里的临时物。
+
+按顺序执行，每步都有判定：
+
+```bash
+# 步骤 1：确认工作目录还在
+cd /root/private_data/workspace/robo && ls -1
+# 判定：应能看到 scripts/ configs/ samples/ logs/ reports/ outputs/ envs/ third_party/ patches/
+
+# 步骤 2：确认产物没丢（重点）
+ls -1 outputs/
+# 判定：应能看到 phase2/ phase3_baseline/ phase4/ phase4_batch/ tasks_official/ batch_bs4/
+#        若 outputs/ 为空 → 本地 agent_work/adaptation/ 里的报告仍可用，但原始 JSON 已丢失，
+#        需重跑第 3 节基线命令重新生成（数据可复现，因为样例与提示词都是固定的）。
+
+# 步骤 3：重载运行时
+source ./env.sh
+
+# 步骤 4：GPU 与依赖自检
+/opt/hyhal/bin/hy-smi
+python3 -c "import qwen_vl_utils; print('deps ok')"
+
+# 步骤 5：清理可能残留的推理进程（只清本任务的）
+ps -eo pid,etime,cmd | grep -E "serve_vllm|serve_sglang|scripts/" | grep -v grep
+# 若有残留：kill -TERM <pid>，确认 hy-smi 显示 VRAM 0% 后再继续
+```
+
+---
+
+## 3. 完整复跑顺序（从零到全部产物）
+
+```bash
+cd /root/private_data/workspace/robo
+source ./env.sh
+
+# ① 第二阶段验收：最小推理跑通 + 两次一致
+python3 scripts/minimal_inference.py \
+  --image samples/images/official_affordance.jpg \
+  --prompt "What is shown in this image?" \
+  --max-new-tokens 64 --repeat 2 --out-dir outputs/phase2
+
+# ② 功能验证：四类任务 + 标注图（人工目视校验用）
+python3 scripts/run_tasks.py --tasks samples/tasks_official.json \
+  --image-dir samples/images --out-dir outputs/tasks_official
+
+# ③ 第三阶段基线：6 样例 × 3 次，稳态 n=12
+python3 scripts/benchmark.py --tasks samples/tasks_official.json \
+  --image-dir samples/images --repeat 3 --out-dir outputs/phase3_baseline
+
+# ④ 第四阶段单变量实验（每次只改一个变量）
+python3 scripts/tune.py --tag attn_fa2 --attn-impl flash_attention_2 --repeat 3 --out-dir outputs/phase4
+python3 scripts/tune.py --tag pix_501760 --max-pixels 501760 --repeat 3 --out-dir outputs/phase4
+python3 scripts/tune.py --tag pix_200704 --max-pixels 200704 --repeat 3 --out-dir outputs/phase4
+
+# ⑤ 批处理扫描（吞吐）
+python3 scripts/benchmark_batch.py --batch-sizes 1 2 4 8 --repeat 3 --out-dir outputs/phase4_batch
+
+# ⑥ 对比总表
+python3 scripts/compare_experiments.py --baseline outputs/phase3_baseline/baseline_raw.json \
+  --dirs outputs/phase4 --out outputs/phase4/comparison.md
+
+# ⑦ vLLM 服务化（官方认可的指定框架之一）
+#    参数与最终提交配置逐字一致（见 submission/bench/run_config.txt）
+python3 scripts/serve_vllm_patched.py \
+  --model "$MODEL_PATH" --served-model-name robobrain2.5-8b-nv \
+  --host 127.0.0.1 --port 30000 \
+  --tensor-parallel-size 1 --pipeline-parallel-size 1 --dtype bfloat16 \
+  --trust-remote-code --gpu-memory-utilization 0.85 --max-model-len 32768 \
+  --enforce-eager --no-enable-prefix-caching \
+  --max-num-batched-tokens 4096 --max-num-seqs 64 \
+  --limit-mm-per-prompt '{"image": 8}'          # 需另开终端
+# 另开终端：探针 + 与基线逐坐标比对
+python3 scripts/probe_http_request.py --backend vllm --port 30000 \
+  --tasks samples/tasks_official.json --image-dir samples/images \
+  --repeat 2 --out-dir outputs/probe_vllm
+python3 scripts/compare_backends.py \
+  --baseline outputs/phase3_baseline/baseline_raw.json \
+  --candidate outputs/probe_vllm/probe_result.json \
+  --out outputs/probe_vllm/agreement.md
+
+# ⑧ 阶段 5：一键完成「起服务 → 规范化 A/B 探针 → 服务冒烟 → 六档压测」
+#    注意：压测会占很久，建议按档拆分执行（见 §3.1）
+bash scripts/run_phase5.sh --serve-only --keep-server --mem-frac 0.85 --ctx 32768
+python3 scripts/smoke_service.py --url http://127.0.0.1:8000 \
+  --model robobrain2.5-8b-nv --out-dir outputs/phase5_smoke
+python3 scripts/bench_service.py --url http://127.0.0.1:8000/v1/chat/completions \
+  --model robobrain2.5-8b-nv --rounds 2 --out-dir outputs/phase5_bench
+```
+
+### 3.1 阶段 5 压测按档拆分（单次任务 1 小时上限）
+
+六档全跑需要 2.5～4 小时，超过单次后台任务的时限，按下面拆开执行，
+每档单独 `--out-dir`，最后合并：
+
+```bash
+python3 scripts/bench_service.py ... --rounds 2 \
+  --tiers "4096:1024:1:8,4096:1024:8:16" --out-dir outputs/phase5_bench/tier4096_a
+python3 scripts/bench_service.py ... --rounds 2 \
+  --tiers "4096:1024:64:128"          --out-dir outputs/phase5_bench/tier4096_b
+python3 scripts/bench_service.py ... --rounds 2 \
+  --tiers "16384:1024:1:8"            --out-dir outputs/phase5_bench/tier16384_a
+python3 scripts/bench_service.py ... --rounds 2 \
+  --tiers "16384:1024:8:16"           --out-dir outputs/phase5_bench/tier16384_b
+python3 scripts/bench_service.py ... --rounds 1 \
+  --tiers "16384:1024:64:128"         --out-dir outputs/phase5_bench/tier16384_c_r1
+python3 scripts/bench_service.py ... --rounds 1 \
+  --tiers "16384:1024:64:128"         --out-dir outputs/phase5_bench/tier16384_c_r2
+```
+
+> `bench_service.py` 每跑完一轮就把 `bench_results.json` / `bench_records.json` 落盘，
+> 即使任务超时，已完成的档位/轮次也不会丢。
+
+### 3.2 提交包路线（当前推荐，与 §3 的历史序列等价但更短）
+
+```bash
+cd /root/private_data/workspace/robo/submission
+
+# 一键：run.sh → env_check.sh → smoke.sh → verify.py → 官方六档压测
+bash reproduce.sh
+#   verify.py 退出码 2 = 精度项 BLOCKED（官方基线未下发，预期结果）
+
+# 单独跑官方格式压测（6 档 × 2 轮，单卡约 4 小时）
+BENCH_MODE=image bash bench.sh
+
+# 提交包自检（对照官方模板逐项校验）
+bash ../tools/check_submission.sh
+
+# 干净环境复现（全新起服务 → 环境采集 → Smoke → 精度 → 性能复跑）
+bash ../tools/clean_repro.sh
+```
+
+### 3.3 收尾流水线（长任务自动衔接，无需盯屏）
+
+```bash
+# 第一阶段：等六档压测结束 → 汇总 → 回填 → 刷新产物 → 自检 → E1/E2/E3 → 恢复基线服务
+setsid nohup bash tools/pipeline_after_bench.sh > logs/pipeline_after_bench.log 2>&1 &
+# 第二阶段：计量口径对照实验 → 回填报告 10/11/05 → 刷新 → 最终检查
+setsid nohup bash tools/pipeline_final.sh > logs/pipeline_final.log 2>&1 &
+# 干净复现
+setsid nohup bash tools/clean_repro.sh > logs/clean_repro_stdout.log 2>&1 &
+# 内存安全网（85 GiB 阈值，先于 kernel OOM killer 动手）
+setsid nohup bash tools/guard_cgroup.sh 85 > /dev/null 2>&1 &
+```
+
+---
+
+## 4. 故障排查表（均为本节点实测）
+
+| 症状 | 根因 | 处置 |
+|---|---|---|
+| `ImportError: libgalaxyhip.so.5` | 未加载 DTK 运行时 | `source ./env.sh`（内部已 source `/opt/dtk/env.sh`） |
+| `hy-smi: command not found` | 不在默认 PATH | 用 `/opt/hyhal/bin/hy-smi` |
+| SSH `banner exchange` 超时 / `Connection closed by 223.113.240.64` | 平台端口转发未就绪 / 实例重启 | 退避重试；查控制台实例状态；**端口可能已变**，改本机 `~/.ssh/config` 的 `Port` |
+| sglang `NameError: name 'paged_attention_ragged' is not defined` | 镜像内 `aiter` 残缺构建；`aiter_backend.py:36-50` 的 `except ImportError` 只 print 不 re-raise，13 个符号全未定义 | 镜像内**无解**（env/flag 改不动）；需离线引入完整匹配的 `aiter` wheel |
+| sglang `--attention-backend flashinfer` | `flashinfer_python >= 0.6.11.post1` 未安装 | 需离线引入 |
+| sglang `--attention-backend wave` | `wave_lang` 未安装 | 需离线引入 |
+| sglang `--attention-backend triton` | `Invalid address access ... Error code: 3` → `Rank 0 scheduler died during initialization (exit code: -6)` | HIP 非法访存发生在 scheduler 初始化阶段；换后端 |
+| sglang `--attention-backend torch_native`（±sdpa / ±`--model-impl transformers`） | 服务能起（Uvicorn running），请求时 `HSA_STATUS_ERROR_EXCEPTION 0x1016` / `KERNEL VMFault`，崩在 `transformers/integrations/sdpa_attention.py:92` → `/pytorch/aten/src/ATen/native/transformers/hip/cutlassfa_adapter.h:148` | torch 侧 HIP SDPA 内核问题，本任务范围外；换后端 |
+| vLLM `AttributeError: 'Qwen3VLTextConfig' object has no attribute 'tie_word_embeddings'` | vLLM 0.15.1 从**子 config** 取该字段，transformers 5.3.0 把它挪到了**顶层复合 config** | 用 `scripts/serve_vllm_patched.py`（sitecustomize 垫片，**不改 site-packages**）；等价 patch 见 `patches/0001-vllm-qwen3-tie-word-embeddings.patch` |
+| 垫片在父进程生效但子进程仍报同一错 | vLLM 用 `VLLM_WORKER_MULTIPROC_METHOD=spawn` 起 EngineCore，monkey-patch 不被继承 | 垫片必须放 `sitecustomize.py`（每个解释器启动时执行） |
+| 批处理（bs>1）输出被污染（出现 `Human:`、长串 `0`） | decoder-only 批处理用 right padding | `processor.tokenizer.padding_side = "left"`（`scripts/batch_infer.py` 已处理） |
+| grounding bbox 明显变形 | `max_pixels` 降到 200704 使视觉 token 减少 42.8%，坐标改变约 48% | 回到 `501760`（已采纳配置） |
+| `sglang.launch_server` 作为可执行文件 → `No such file or directory` | 本版本入口是 `sglang serve` 或 `python3 -m sglang.launch_server` | 二选一 |
+| `--limit-mm-per-prompt`（sglang）不存在 | 本版本参数名为 `--limit-mm-data-per-request` | 改名 |
+| `--enable-prefix-caching`（sglang）不存在 | radix cache 默认开，关掉用 `--disable-radix-cache` | 改参数 |
+| **serving 的 grounding 输出不可解析（`<bbox>x y x y</bbox>`）** | 官方正则只认 `[x1, y1, x2, y2]`；vLLM 在"分析模式"下输出尖括号形式 | 用 `scripts/answer_adapter.py` 做纯格式桥（整数原样搬运，原始文本单独保留） |
+| **serving 的 grounding 输出与直跑完全不同（整个回答风格都变了）** | 官方 upstream 用 `qwen_vl_utils` 取图 → **二次重采样**（先按 28 倍数 PIL 缩放，processor 再按 32 倍数缩放）；直接上传原图只经历一次缩放，像素最大差 **0.47**，翻转了首个生成 token（`The`/`To` 在 bf16 下 logit 相等 24.5） | 客户端用 `scripts/image_canonical.py` 规范化后再以 PNG 上传（`probe_http_request.py` 默认已启用，`--no-canonical` 可关闭做 A/B） |
+| **压测数字偏乐观（TTFT 异常低）** | vLLM 默认开启 prefix caching，相同 prompt 的 prefill 直接命中缓存（本轮实测命中率 **64%**） | 加 `--no-enable-prefix-caching`，并让每个请求使用不同 filler 文本（token 数相同） |
+| `vllm serve` 启动时被 OOM 杀掉、Pod 重建 | 非 eager 模式下 inductor 编译期内存峰值触碰 115 GiB cgroup 上限 | **首跑一律 `--enforce-eager`**；要试非 eager 必须带内存看门狗，见 `scripts/run_non_eager_ab.sh` |
+| **16384 档请求被服务拒收（400）** | `--max-model-len 20480` 装不下「随机文本解码后重编码 ~17.3K + 视觉 2,042 + 输出 1,024 ≈ 20.3K」 | `MAX_LEN` 改回官方 `env.sh` 的 **32768**；模型 `max_position_embeddings=262144` 未改。实测该改动**不改变 KV cache 容量**（均 253,312 token） |
+| **官方压测吞吐虚高约 4×，但 `total_output_tokens` 显示 1024×N** | 客户端 `output_lens.append(output_len)` 统计的是**计划长度**；且 `--disable-ignore-eos` 实为**允许提前 EOS**（`payload["ignore_eos"] = not args.disable_ignore_eos`），官方脚本不传该开关即 `ignore_eos=True` | `bench.sh` **删掉**该开关，回到官方默认；核对 `total_output_tokens_retokenized`（真实输出长度）而非只看 `total_output_tokens` |
+| 官方客户端报 `Image dataset only supports backends: [...]` | `sglang/benchmark/datasets/image.py` 对后端做硬白名单，`--backend vllm` 直接抛错，一个请求都发不出 | 用 `scripts/bench_serving_vllm_image.py` 在**进程内**把数据集构造的后端映射为 `sglang-oai-chat`（服务端套 chat template，语义一致），不改公共 site-packages |
+| 官方客户端 image 数据集加载 processor 失败（节点无外网） | `AutoProcessor.from_pretrained(model_id)`，而 `model_id` 取 `--served-model-name`（服务名非路径） | 在**工作目录内** HF 缓存建只读软链接 `$HF_HOME/hub/models--<服务名>/snapshots/main -> $MODEL_PATH` |
+
+---
+
+## 5.5 vLLM 启动期内存风险（2026-10-27 事件记录与规避）
+
+**事件**：2026-10-27 01:02:34 启动 vLLM（try3，第一个越过 config 修复、进入
+`torch.compile` / CUDA graph capture 阶段的版本），约 01:07 SSH 通道即告中断
+（TCP 可达但网关在 SSH 握手前关闭），持续 49 分钟未恢复。
+该阶段是 vLLM 启动期内存占用最高的环节（inductor 编译 + 权重加载 + graph 捕获），
+而 notebook 配额约为 **6 核 / 115 GB**，**容器被 OOM killer 杀掉是合理解释**。
+
+**恢复后必须先做的两件事**：
+
+```bash
+# ① 确认是否 OOM
+dmesg -T 2>/dev/null | grep -iE "oom|killed process" | tail -20
+cat /sys/fs/cgroup/memory.max 2>/dev/null; cat /sys/fs/cgroup/memory.peak 2>/dev/null
+# ② 复现时降低启动期内存峰值（一次只加一个）
+```
+
+**降内存启动参数（按风险从低到高）**：
+
+| 措施 | 命令/环境变量 | 作用 | 代价 |
+|---|---|---|---|
+| 跳过编译与 graph 捕获 | `--enforce-eager` | 免掉 inductor 编译，峰值大幅下降 | 吞吐下降（需实测） |
+| 降低 KV 池占比 | `--gpu-memory-utilization 0.70` | 给编译期留余量 | KV 容量变小 |
+| 限制编译并发 | `VLLM_COMPILE_WORKER_COUNT=1` | 减少编译子进程内存 | 编译变慢 |
+| 减小 batched tokens | `--max-num-batched-tokens 4096` | 降低 profiling 峰值 | 吞吐下降 |
+| 关前缀缓存 | `--no-enable-prefix-caching` | 省一点 KV | 重复前缀变慢 |
+| **加内存看门狗（强烈建议）** | `bash scripts/run_non_eager_ab.sh --mem-limit-gib 70` | 每 3 s 读 cgroup 用量，超阈值先杀进程，**避免 kernel OOM killer 杀掉容器导致 Pod 重建** | 非 eager 起不来时只能记为"本容器装不下" |
+
+> **看门狗的必要性**：历史上正是非 eager 启动把容器内存顶到 115 GiB 上限，
+> OOM killer 杀掉容器 → Pod 重建 → SSH 侧车失效 → 5 小时不可达。
+> 在同一台机器上复现这个实验时，**必须**先用看门狗版本，不要裸跑。
+> 被看门狗中止的实验是**有效结论**（"非 eager 在 115 GiB 配额下装不下"），不是脚本失败。
+
+> 纪律不变：**一次只改一个变量**，改完用第 3 节 ③ 的基线命令复测，
+> 用 `outputs/phase3_baseline/baseline_raw.json` 的 TTFT / 吞吐做同口径对比。
+> 若 `--enforce-eager` 让首提性能基线明显变差，则该参数**不能**进首提配置——
+> 应改为「先单独跑一次 eager 确认能起，再用非 eager 跑首提基线」。
+
+---
+
+## 5.6 换实例 / 换镜像的一键重放（2026-10-27 新增）
+
+适用场景：Pod 被重建、或按决定**换用官方 sglang 镜像**（torch 2.10 / vllm 0.18.1 栈）的新实例。
+
+```bash
+# ① 体检（工作目录完整性 / 环境指纹 / 模型只读校验 / 垫片是否需要）
+bash /root/private_data/workspace/robo/tools/bootstrap_vllm_adaptation.sh
+
+# ② 补齐隔离依赖 + 拉起服务 + 跑 6 样例探针
+bash /root/private_data/workspace/robo/tools/bootstrap_vllm_adaptation.sh --install --probe
+```
+
+脚本原则与红线一致：不写公共 site-packages（垫片走 `sitecustomize` + `PYTHONPATH` 注入）、
+新增依赖只装进 `$WORK_DIR/envs/pylibs`（`--no-deps --target`）、模型目录只读、
+`--enforce-eager` 等已验证启动参数一个不改。
+
+**换镜像前务必确认**（产物都在持久卷 `/root/private_data/workspace/robo`，但仍要查一眼）：
+
+```bash
+cd /root/private_data/workspace/robo
+ls -l submission/bench/round1.jsonl submission/bench/round2.jsonl \
+      submission/verify_result.json envs/vllm_shim/sitecustomize.py
+```
+
+完整方案与镜像栈证据见 `reports/14_new_instance_migration_plan.md`、
+`reports/13_scnet_image_registry_survey.md`。
+
+---
+
+## 6. 产物清单
+
+| 路径 | 内容 |
+|---|---|
+| `outputs/phase2/phase2_result.json` | 第二阶段验收结论（`passed`、`failures`） |
+| `outputs/phase3_baseline/baseline_raw.json` | 第三阶段基线原始记录（18 条：6 样例 × 3 次） |
+| `outputs/phase4/<tag>.json` | 第四阶段单变量实验原始数据 |
+| `outputs/phase4/comparison.md` | 实验对比总表 |
+| `outputs/phase4_batch/batch_sweep.json` | 批处理扫描数据 + 正确性逐条比对 |
+| `outputs/tasks_official/` | 四类任务输出 + 标注图 |
+| `outputs/batch_bs4/` | bs=4 标注图 |
+| `outputs/probe_vllm/` | vLLM 服务化探针与跨后端一致性比对 |
+| `outputs/phase5_probe_canonical/` | **规范化后**的 serving 探针（`probe_result.json` + `agreement.md`） |
+| `outputs/phase5_probe_nocanonical/` | **未规范化**（修复前行为）的对照探针 |
+| `outputs/phase5_smoke/smoke_results.json` | 服务级冒烟：四类任务 / 多图 / 流式 / 多轮 / 异常输入 |
+| `outputs/phase5_bench/<chunk>/bench_results.json` | 六档压测汇总（每轮落盘） |
+| `outputs/phase5_bench/<chunk>/bench_records.json` | 六档压测逐请求原始记录 |
+| `logs/probe_tie.json` | grounding 首 token 平局的取证（两条取图路径的 top-10 概率与 logit） |
+| `logs/determinism_probe.jsonl` | 3 进程 × 4 次的确定性记录（12/12 相同） |
+| `logs/` | 每次运行的完整日志（含 8 份 sglang 后端探针） |
+| `submission/bench/` | **官方格式压测**：两轮原始 jsonl、12 份档位日志、`summary.md`（官方 13 列）、`summary_detailed.md` |
+| `submission/bench_pitfall_ignore_eos/` | `--disable-ignore-eos` 语义反转导致吞吐虚高 4× 的**错误口径原始数据**（留证） |
+| `submission/bench_verify/` | 「每请求是否真生成满 1024 token」的独立小样本核对 |
+| `submission/samples/MANIFEST.md` | 固定样例的 sha256、来源（upstream commit）与校验结论 |
+| `outputs/phase4_parse_coverage/` | 官方解析正则的**覆盖边界**检查（验收标准 §4.3）：20 条用例，逐条给原文/解析值/失败原因 |
+| `outputs/phase5_ab_noneager/<tag>/` | **E1** 非 eager A/B 产物（jsonl + 内存峰值 + 一致性比对） |
+| `outputs/phase5_ab_bnb/<tag>/` | **E2** `--max-num-batched-tokens` A/B 产物（4096/8192/16384） |
+| `outputs/phase5_gemm_trace/<tag>/` | **E3** rocBLAS layer3 trace（诊断用，非性能数据） |
+| `outputs/phase5_token_accounting/` | **E4** 输出 token 计量口径对照实验（随机 vs 自然提示词） |
+| `outputs/phase5_token_accounting/server_counter_segments.json` | 服务端引擎计数器逐窗口核算结果 |
+| `logs/clean_repro/` | **干净环境复现**日志（env / smoke / verify / 性能复跑） |
+| `reports/10a_server_counter_crosscheck.md` | 服务端计数器 vs 官方客户端逐档交叉核对表 |
+| `reports/00_RUNBOOK.md` | 本文件 |
+| `reports/01..10_*.md` | 环境 / 适配 / 基线 / 调优 / 最终 / SGLang 兼容 / 设备映射 / 基线差距评估 / vLLM 适配 / 阶段 5 压测 |
+| `reports/11_tuning_experiments.md` | 服务级单变量调优实验 E1–E4（判定标准实验前登记） |
+| `reports/12_official_asset_provenance.md` | upstream 资产/提示词溯源（case7 标 `NOT_REPRODUCIBLE`） |
+| `reports/13_scnet_image_registry_survey.md` | **镜像库 22 条 SGLang 镜像清单 + Harbor 读镜像方法 + 各镜像构建栈实证** |
+| `reports/14_new_instance_migration_plan.md` | **换镜像迁移方案：保留 vLLM 适配成果、一键重放、基线政策、风险与卡时估算** |
+| `samples/scnet_image_inventory.json` | 机器可读镜像清单（22 条 + sf_b075 关联项） |
+| `tools/bootstrap_vllm_adaptation.sh` | **新实例一键重放 vLLM 适配**（体检 / 装依赖 / 起服务 / 探针） |
+
+---
+
+## 7. 红线（本次任务全程遵守）
+
+- ❌ 不改 `/opt/dtk`、`/opt/hyhal`、site-packages、公共 Python 环境（需要时在工作目录内做副本 + patch）
+- ❌ 不改模型目录（只读）
+- ❌ 不终止其他任务的进程、不重置设备、不改调度资源
+- ❌ 不做会改变输出质量的改动（量化 / 换精度 / 改采样语义）除非明确授权
+- ❌ 每次实验只改一个主要变量；变化未超过测量波动不宣称收益
+- ✅ 所有缓存 / 临时文件 / 新增依赖都在工作目录内（`envs/`、`cache/`、`tmp/`）
+- ✅ 不把私钥、令牌写入脚本或报告

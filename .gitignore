@@ -1,0 +1,8 @@
+# 隔离依赖与运行产物：不进交付仓库（体积大、可由脚本重新生成）
+envs/pylibs/
+cache/
+tmp/
+outputs/
+logs/
+*.pyc
+__pycache__/
