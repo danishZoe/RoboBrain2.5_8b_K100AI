@@ -203,6 +203,22 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
 
 **未改动**：模型权重、`config.json`、`generation_config.json`、分词器、chat template、采样语义。
 
+### 5.1 交付代码 revision
+
+<!-- REVISION:BEGIN -->
+
+| 项 | 值 |
+|---|---|
+| 交付代码 revision（git commit） | `0658ed25dcf32eaa66422e1e5fbdce16682fcd11` |
+| 短 hash | `0658ed2` |
+| 记录时间 | 2026-10-27T21:44:22+08:00 |
+| 纳入仓库的文件数 | 304 |
+| 提交包逐文件校验值 | `submission/MANIFEST.sha256` |
+| 仓库内容范围 | `submission scripts tools configs samples patches reports platform` |
+
+> 该 revision 由 `tools/record_revision.sh` 在交付包定稿后生成，仓库只含交付物（隔离依赖 `envs/pylibs/` 与运行产物 `outputs/`、`logs/` 不入仓库，可由提交包脚本重新生成）。PDF 要求代码与镜像分别提交到指定托管平台，**托管链接仍需用户上传后回填**；节点无外网，无法代替上传。
+
+
 ---
 
 ## 6. 目录与产物索引
