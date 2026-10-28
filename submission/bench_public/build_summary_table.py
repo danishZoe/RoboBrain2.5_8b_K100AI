@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import sys
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -56,18 +57,42 @@ def _load(path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def _dec(x, nd=2) -> str:
+    """定点小数，四舍五入（ROUND_HALF_UP）。
+
+    不用 Python 默认的 round-half-even：0.78125*100 = 78.125 会被格式化成 78.12，
+    而 ``reports/16_public_bench_results.md`` §4.3 记录的是 0.7813 → 78.13，
+    同一个指标在两处差 0.01 pt。统一成 HALF_UP 后，报告、汇总表、回归表处处一致。
+    """
+    q = Decimal(1).scaleb(-nd)
+    return str(Decimal(repr(float(x))).quantize(q, rounding=ROUND_HALF_UP))
+
+
 def _pct(v) -> str:
     try:
-        return f"{float(v) * 100:.2f}%"
+        return f"{_dec(float(v) * 100, 2)}%"
     except Exception:
         return "—"
 
 
 def _num(v, nd=4) -> str:
     try:
-        return f"{float(v):.{nd}f}"
+        return _dec(v, nd)
     except Exception:
         return "—"
+
+
+def _delta(a, b, nd=2) -> str:
+    """a - b，带符号（负号用 U+2212，与正文表格排版一致）。"""
+    try:
+        d = float(a) - float(b)
+    except Exception:
+        return "—"
+    s = _dec(abs(d), nd)
+    if abs(d) < 10 ** (-nd) / 2:
+        return "±0.00"
+    return ("+" + s) if d > 0 else ("−" + s)
+
 
 
 def rows_refspatial(root: str) -> List[List[str]]:
@@ -106,7 +131,15 @@ def rows_tracespatial(root: str) -> List[List[str]]:
         for task, ti in vi.get("tasks", {}).items():
             sc = ti.get("scores", {})
             states = ti.get("terminal_states", {})
+            ok = states.get("ok", 0)
             fails = sum(v for k, v in states.items() if k != "ok")
+            aud = sc.get("scoring_audit") or {}
+            # 「实际计分数」= 官方判分器真正计分的分母。
+            # 3D 子集官方脚本会排除深景病态样本（100 → 96），不能用计划题数冒充。
+            scored = aud.get("n_evaluated_total")
+            if scored is None:
+                scored = ti.get("n")
+            n = ti.get("n")
             metrics = [
                 ("3D Start", sc.get("start_success_rate"), "83%（论文）",
                  "RoboTracer_Intrinsics_Depth=75%"),
@@ -119,16 +152,33 @@ def rows_tracespatial(root: str) -> List[List[str]]:
                 ("2D End-in-BBox", sc.get("end_in_bbox"), "—",
                  "RoboTracer_Intrinsics_Depth=43%"),
             ]
+            if task == "3D":
+                # 仅 3D 子集有碰撞检查与 3D 距离；2D 子集上碰撞率恒为 1.0、无 3D 距离
+                metrics.append(("No-Collision Rate", sc.get("no_collision_rate"),
+                                "—", None))
             for name, val, ref, ref2 in metrics:
                 if val is None:
                     continue
+                diff = _pct(val) if ref2 is None \
+                    else f"{_pct(val)}；同集官方参照 {ref2}"
                 out.append([
                     f"TraceSpatial / {task} / {variant} / {name}",
-                    str(ti.get("n")), str(ti.get("n")), str(ti.get("n")),
-                    str(fails), ref, _pct(val),
-                    f"{_pct(val)}；同集官方参照 {ref2}", "未定义",
+                    str(n), str(ok), str(scored),
+                    str(fails), ref, _pct(val), diff, "未定义",
                     "PASS（公开基准）",
                 ])
+            if task == "3D":
+                for name, key in (("3D Start 距离(m)", "start_distance"),
+                                  ("3D End 距离(m)", "end_distance")):
+                    v = sc.get(key)
+                    if v is None:
+                        continue
+                    out.append([
+                        f"TraceSpatial / {task} / {variant} / {name}",
+                        str(n), str(ok), str(scored), str(fails),
+                        "越低越好；RoboTracer_Intrinsics_Depth 见报告",
+                        _num(v, 4), _num(v, 4), "未定义", "PASS（公开基准）",
+                    ])
             for name, key in (("2D DFD", "metrics_2d"), ("3D DFD", "metrics_3d")):
                 raw = sc.get(key)
                 if not raw:
@@ -148,8 +198,8 @@ def rows_tracespatial(root: str) -> List[List[str]]:
                     continue
                 out.append([
                     f"TraceSpatial / {task} / {variant} / {name}",
-                    str(ti.get("n")), str(ti.get("n")), str(ti.get("n")),
-                    str(fails), "越低越好；RoboTracer_Intrinsics_Depth 见报告",
+                    str(n), str(ok), str(scored), str(fails),
+                    "越低越好；RoboTracer_Intrinsics_Depth 见报告",
                     _num(v), _num(v), "未定义", "PASS（公开基准）",
                 ])
     return out

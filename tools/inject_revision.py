@@ -87,17 +87,28 @@ def main():
     p = "submission/README.md"
     if os.path.exists(p):
         t = open(p, encoding="utf-8").read()
+        rev = rec.get("revision", "-")
+        short = rec.get("revision_short", "-")
         old = "- 提交仓库：【待填】"
         new = ("- 提交仓库：【待填：托管平台可访问链接】；"
                "本次交付代码 revision = `%s`（短 `%s`，逐文件校验值见 "
-               "`MANIFEST.sha256`，详见 `.revision`）" %
-               (rec.get("revision", "-"), rec.get("revision_short", "-")))
+               "`MANIFEST.sha256`，详见 `.revision`）" % (rev, short))
         if old in t:
             t = t.replace(old, new, 1)
             open(p, "w", encoding="utf-8").write(t)
             print("[rev] %s updated" % p)
         else:
-            print("[rev] %s: 提交仓库占位符未找到，跳过" % p)
+            # 已经是「带 revision 的长形式」：只替换 hash，其余文字（含托管平台
+            # 待填占位符）原样保留，避免每次回填都把用户填的链接冲掉。
+            pat = re.compile(r"(revision = `)[0-9a-f]{7,40}(`（短 `)[0-9a-f]{7,40}(`)")
+            t2, n = pat.subn(
+                lambda m: m.group(1) + rev + m.group(2) + short + m.group(3),
+                t, count=1)
+            if n:
+                open(p, "w", encoding="utf-8").write(t2)
+                print("[rev] %s revision hash updated -> %s" % (p, short))
+            else:
+                print("[rev] %s: 提交仓库占位符未找到，跳过" % p)
     return 0
 
 
