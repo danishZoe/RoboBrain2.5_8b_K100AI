@@ -1,8 +1,29 @@
-# 隔离依赖与运行产物：不进交付仓库（体积大、可由脚本重新生成）
-envs/pylibs/
+# Runtime environments and caches (recreated by run.sh/install scripts)
+envs/
+envs/*
 cache/
 tmp/
 outputs/
 logs/
 *.pyc
 __pycache__/
+
+# Large benchmark/data mirrors; keep manifests and code, fetch data separately
+third_party/benchmarks/
+third_party/upstream_eval/
+third_party/Robo-Dopamine/
+third_party/RoboBrain2.5-upstream-HEAD/
+third_party/RoboBrain2.5/
+
+# Generated local snapshots and archives
+*.tar.gz
+*.tgz
+*.bak_*
+*.bak-*
+submission/__pycache__/
+submission/logs/
+
+# Secrets / platform-local state
+.env
+*.token
+*.key

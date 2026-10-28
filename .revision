@@ -9,3 +9,5 @@ note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs�
                  （隔离依赖与运行产物，可由提交包脚本重新生成）。
                  托管平台链接与 revision 仍需由用户上传后回填
                  （PDF 要求代码与镜像分别提交到指定托管平台）。
+revision_note_commit= b68ecc43fb9ca22bde148be7f5d115a348a546f9
+revision_note_short = b68ecc4
