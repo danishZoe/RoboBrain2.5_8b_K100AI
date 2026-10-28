@@ -129,6 +129,11 @@ else
   # 把笔记 commit 追加进 .revision
   if [ -f "$W/.revision" ]; then
     printf 'revision_note_commit= %s\nrevision_note_short = %s\n' "$NOTE" "$SHORTNOTE" >> "$W/.revision"
+    # .revision 不在 DELIVERABLES 列表里，必须显式提交，
+    # 否则 GitHub 上的 .revision 会一直停留在上一轮的旧值，
+    # 与 README 里写的 revision 对不上。
+    git -C "$W" add -f .revision
+    git -C "$W" commit -q -m "docs: persist revision note (revision_note_commit=${SHORTNOTE})" || true
   fi
   echo "[rev] revision_note_commit = ${NOTE}"
   git -C "$W" log --oneline -3 | sed 's/^/[rev] /'
