@@ -91,8 +91,12 @@ if [ "$FINALIZE" = "0" ]; then
   NOW=$(date -Is)
 
   MAN="$W/submission/MANIFEST.sha256"
-  ( cd "$W/submission" && find . -type f ! -name 'MANIFEST.sha256' -print0 \
-    | sort -z | xargs -0 sha256sum ) > "$MAN"
+  # 清单只覆盖**随仓库交付的文件**：__pycache__/*.pyc 与 logs/ 都被 .gitignore
+  # 排除、不进仓库，若写进清单，评审 `sha256sum -c MANIFEST.sha256` 会报
+  # 一堆 "No such file"。过滤规则必须与 .gitignore 的排除项保持一致。
+  ( cd "$W/submission" && find . -type f ! -name 'MANIFEST.sha256' \
+      ! -name '*.pyc' ! -path '*/__pycache__/*' ! -path './logs/*' \
+      -print0 | sort -z | xargs -0 sha256sum ) > "$MAN"
 
   cat > "$W/.revision" <<EOF
 # RoboBrain2.5-8B-NV / K100AI (K500SM_AI) 交付 revision
@@ -119,8 +123,12 @@ else
   # 逐文件哈希随之变化。所以阶段 B 必须**先重算 MANIFEST 再提交**，
   # 否则提交出去的清单与它所列的文件对不上（评审按 sha256 复核会失败）。
   MAN="$W/submission/MANIFEST.sha256"
-  ( cd "$W/submission" && find . -type f ! -name 'MANIFEST.sha256' -print0 \
-    | sort -z | xargs -0 sha256sum ) > "$MAN"
+  # 清单只覆盖**随仓库交付的文件**：__pycache__/*.pyc 与 logs/ 都被 .gitignore
+  # 排除、不进仓库，若写进清单，评审 `sha256sum -c MANIFEST.sha256` 会报
+  # 一堆 "No such file"。过滤规则必须与 .gitignore 的排除项保持一致。
+  ( cd "$W/submission" && find . -type f ! -name 'MANIFEST.sha256' \
+      ! -name '*.pyc' ! -path '*/__pycache__/*' ! -path './logs/*' \
+      -print0 | sort -z | xargs -0 sha256sum ) > "$MAN"
   echo "[rev] manifest refreshed ($(wc -l < "$MAN") files)"
 
   commit_all "docs: record delivery revision $(git -C "$W" rev-parse --short HEAD 2>/dev/null || echo '')" || exit 1
