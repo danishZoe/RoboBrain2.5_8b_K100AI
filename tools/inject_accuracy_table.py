@@ -214,7 +214,10 @@ def table_a(root: str) -> List[str]:
     t3 = ts["tasks"].get("3D") or {}
     if t3:
         sc = t3["scores"]
-        den3 = "%s/%s" % (t3["scored"], t3["n"])
+        # 3D 子集的分母是我们主动排除 4 条深景病态样本后的 96/100
+        # （官方判分器自身没有排除任何样本），必须在表里标出来
+        den3 = "%s/%s（我们排除 %s 条深景病态）" % (
+            t3["scored"], t3["n"], t3.get("excluded", 0))
         for label, key, paper_key in (("**3D Start Success**", "start_success_rate", "3D Start"),
                                       ("**3D End Success**", "end_success_rate", "3D End"),
                                       ("**Overall Success**", "overall_success_rate", "Success")):
@@ -399,22 +402,36 @@ def build_public_block(root: str) -> str:
     body += table_d(root)
     body += [
         "",
-        "> 表 D 的「实际计分数」是**官方判分器真正计分的分母**：",
-        "> TraceSpatial 3D 子集为 **96/100**（官方脚本排除 4 条深景病态样本，见 §6.2.1）、",
-        "> 2D 子集 2D DFD 计入路径均值的样本数为 **97/100**；",
-        "> RefSpatial `Unseen` 77 条是**重叠子集**，不计入默认范围均值。",
+        "> 表 D 的「实际计分数」是**该指标实际计入的分母**，三种来源必须分清：",
+        "> * **TraceSpatial 3D 子集 96/100**：这 4 条是**我们主动排除**的深景病态样本"
+        "（索引 56/78/82/98，官方判分单条 >65 min 仍未结束，见 §6.2.1）——",
+        "  **官方判分器没有排除任何样本**，它自己的 `[Skip]` 数为 0（`upstream` 变体 1）；",
+        "  被排除的索引写在产物 `excluded_sample_indices` 字段里，可审计；",
+        "> * **2D 子集 2D DFD 计入路径均值 97/100**：这 3 条是**官方脚本自己**"
+        "因归一化后含 NaN / 尺寸无效而静默丢弃的；",
+        "> * **RefSpatial `Unseen` 77 条**是**重叠子集**，不计入默认范围均值。",
         "",
     ]
     return "\n".join(body)
 
 
-def replace_block(text: str, begin: str, end: str, legacy: str, body: str) -> str:
+def replace_block(text: str, begin: str, end: str, legacy: str, body: str):
+    """把标记块替换成新内容。返回 (新文本, 状态)。
+
+    状态取值：replaced / unchanged / missing —— 区分「没找到标记」与
+    「找到了但内容与上次一致」，后者不是错误。
+    """
     if begin in text and end in text:
         pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
-        return pat.sub(lambda _m: begin + "\n\n" + body + "\n\n" + end, text, count=1)
+        m = pat.search(text)
+        new_block = begin + "\n\n" + body + "\n\n" + end
+        if m and m.group(0) == new_block:
+            return text, "unchanged"
+        return pat.sub(lambda _m: new_block, text, count=1), "replaced"
     if legacy in text:
-        return text.replace(legacy, begin + "\n\n" + body + "\n\n" + end, 1)
-    return text
+        return text.replace(
+            legacy, begin + "\n\n" + body + "\n\n" + end, 1), "replaced"
+    return text, "missing"
 
 
 def main() -> int:
@@ -441,10 +458,11 @@ def main() -> int:
             print("[accuracy] skip %s (no source data)" % key)
             continue
         begin, end, legacy = BLOCKS[key]
-        before = t
-        t = replace_block(t, begin, end, legacy, body)
-        if t == before:
+        t, status = replace_block(t, begin, end, legacy, body)
+        if status == "missing":
             print("[accuracy] WARN: marker not found for %s (%s)" % (key, legacy))
+        elif status == "unchanged":
+            print("[accuracy] %s unchanged (内容与上次生成一致)" % key)
         else:
             print("[accuracy] %s injected (%d chars)" % (key, len(body)))
 

@@ -210,7 +210,10 @@ TraceSpatial-Bench 共 **100 题**（`trajectory_dataset.json`）。官方判分
 ### 4.3 3D 官方判分结果
 
 官方 `compute_accuracy_3d`（TSDF 体素化 + DBSCAN 去噪 + 占用栅格碰撞检查）。
-**口径：100 条里 96 条**（排除 4 条深景病态样本，见 §5.9；分母如实标注）。
+**口径：100 条里 96 条**（**由我们主动排除** 4 条深景病态样本 56/78/82/98，
+官方判分单条 >65 min 仍未结束；**官方判分器自身未排除任何样本**，其 `[Skip]` 机制
+在 official 变体上计数为 0。排除索引写在产物 `excluded_sample_indices` 字段里，可审计。
+见 §5.9；分母如实标注）。
 
 | 组合 | 3D Start ↑ | 3D End ↑ | Success ↑ | No-Collision ↑ | Start 距离(m) ↓ | End 距离(m) ↓ | DFD ↓ | HD ↓ | RMSE ↓ | MAE ↓ |
 |---|---|---|---|---|---|---|---|---|---|---|
