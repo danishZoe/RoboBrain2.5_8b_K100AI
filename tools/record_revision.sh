@@ -87,6 +87,16 @@ EOF
   echo "[rev] .revision written (阶段 A 完成；跑 inject_revision.py 后再执行 --finalize)"
 else
   # 阶段 B：revision 笔记已写进报告与 README，提交之
+  #
+  # 注意：阶段 A 生成的 MANIFEST.sha256 此时**已经过期** —— inject_revision.py
+  # 在阶段 A 之后改写了 submission/README.md（把 revision 写进正文），
+  # 逐文件哈希随之变化。所以阶段 B 必须**先重算 MANIFEST 再提交**，
+  # 否则提交出去的清单与它所列的文件对不上（评审按 sha256 复核会失败）。
+  MAN="$W/submission/MANIFEST.sha256"
+  ( cd "$W/submission" && find . -type f ! -name 'MANIFEST.sha256' -print0 \
+    | sort -z | xargs -0 sha256sum ) > "$MAN"
+  echo "[rev] manifest refreshed ($(wc -l < "$MAN") files)"
+
   commit_all "docs: record delivery revision $(git -C "$W" rev-parse --short HEAD 2>/dev/null || echo '')" || exit 1
   NOTE=$(git -C "$W" rev-parse HEAD)
   SHORTNOTE=$(git -C "$W" rev-parse --short HEAD)

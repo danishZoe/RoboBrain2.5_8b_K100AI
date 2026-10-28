@@ -469,7 +469,123 @@ source env.sh && python verify.py       # 跑评测，结果写入 verify_result
 | RefSpatial-Bench | 277（Location 100 + Placement 100 + Unseen 77） | `RoboRefer/Evaluation/summarize_acc.py` | 见下表 |
 | TraceSpatial-Bench | 100 | `RoboTracer/Evaluation/summarize_acc.py` | 见下表 |
 
-<!-- PUBLIC_BENCH_TABLE -->
+<!-- PUBLIC_BENCH_TABLE:BEGIN -->
+
+#### 6.2.0 精度总表（主口径 · 对外上报口径）
+
+> 本节所有数字由 `tools/inject_accuracy_table.py` 从**官方判分器产出的原始 JSON**
+> 现场生成（`outputs/bench_public/{cvbench,refspatial,tracespatial}/summary.json`），
+> **不在本文手写**；改口径请改脚本后重跑，不要直接编辑本块。
+
+**表 A：主指标一览（主口径，一屏看完）**
+
+| 基准 | 主指标 | 方向 | 分母 / 口径 | 论文参考 | 本次主口径 | 差值 |
+|---|---|---|---|---|---|---|
+| CV-Bench | **综合分 CV_score** | ↑ | 2638 / `canonical_png` | 94.58 | **88.12** | **−6.46 pt** |
+| CV-Bench | Acc(ADE20K) | ↑ | 2638 / `canonical_png` | 论文只给综合分 94.58 | 77.88 | — |
+| CV-Bench | Acc(COCO) | ↑ | 2638 / `canonical_png` | 论文只给综合分 94.58 | 85.96 | — |
+| CV-Bench | Acc(Omni3D 3D) | ↑ | 2638 / `canonical_png` | 论文只给综合分 94.58 | 94.33 | — |
+| CV-Bench | Acc_2D | ↑ | 2638 / `canonical_png` | 论文只给综合分 94.58 | 81.92 | — |
+| CV-Bench | Acc_3D | ↑ | 2638 / `canonical_png` | 论文只给综合分 94.58 | 94.33 | — |
+| RefSpatial-Bench | Location | ↑ | 100 / `upstream_scaled` | 论文未公开子集切分 | **68.00** | — |
+| RefSpatial-Bench | Placement | ↑ | 100 / `upstream_scaled` | 论文未公开子集切分 | **58.00** | — |
+| RefSpatial-Bench | **默认范围均值**（Location+Placement） | ↑ | mean(Location, Placement) / `upstream_scaled` | 60.50（聚合口径未公开） | **63.00** | **+2.50 pt** |
+| RefSpatial-Bench | Unseen（重叠子集，单列，不计入默认均值） | ↑ | 77 / `upstream_scaled` | — | 48.05 | — |
+| TraceSpatial-Bench | **3D Start Success** | ↑ | 96/100 / `official` | 83 | **78.13** | **−4.88 pt** |
+| TraceSpatial-Bench | **3D End Success** | ↑ | 96/100 / `official` | 63 | **63.54** | **+0.54 pt** |
+| TraceSpatial-Bench | **Overall Success** | ↑ | 96/100 / `official` | 44 | **46.88** | **+2.88 pt** |
+| TraceSpatial-Bench | No-Collision Rate | ↑ | 96/100 / `official` | — | 81.25 | — |
+| TraceSpatial-Bench | 3D Start 距离 (m) | ↓ | 96/100 / `official` | — | 0.1268 | — |
+| TraceSpatial-Bench | 3D End 距离 (m) | ↓ | 96/100 / `official` | — | 0.1965 | — |
+| TraceSpatial-Bench | 2D Start-in-Mask | ↑ | 100/100 / `official` | — | 73.00 | — |
+| TraceSpatial-Bench | 2D End-in-BBox | ↑ | 100/100 / `official` | — | 52.00 | — |
+| TraceSpatial-Bench | 2D DFD | ↓ | 97/100（计入路径均值） / `official` | — | 0.2055 | — |
+
+**表 B：本节各表的口径性质 —— 哪些数字可以上报**
+
+| 小节 / 表 | 内容 | 口径性质 | 能否作为上报数字 |
+|---|---|---|---|
+| §6.2.0 表 A | 三个公开基准的**主口径主指标** | 主口径（与上游逐字一致） | ✅ 可以 |
+| §6.2.0 表 D | 全部指标 × 全部次口径 | 主口径 + 次口径并列 | 仅「主口径」行可以 |
+| §6.2.0 表 C | 同配置重复推理、离线重判分 | 稳定性 / 可复现性 | ✅ 可以（作为证据） |
+| §6.2.2 | `Count` 缺口成因（误差分布 + 目视核对） | 归因 | ❌ 仅归因 |
+| §6.2.3 | 上采样（`Count` 788 题 / 全量 2638 题） | **在评测集上按分数选出的协议** | ❌ 禁止（验收要求 §4.2） |
+| §6.2.4 | 提示词口径、运行间噪声底、评测耗时台账 | 归因 + 台账 | ❌ 仅归因 |
+
+**表 C：稳定性与可复现性**
+
+| 检查 | 结果 |
+|---|---|
+| CV-Bench 固定样例 × 2 次重复推理 | 原始输出一致 12/12，变化数 0，变化率 0.0，终态全 OK ✅ |
+| RefSpatial-Bench 固定样例 × 2 次重复推理 | 原始输出一致 5/12，变化数 7，变化率 0.5833，终态全 OK ✅ |
+| TraceSpatial-Bench 固定样例 × 2 次重复推理 | 原始输出一致 3/12，变化数 9，变化率 0.75，终态全 OK ✅ |
+| 离线重判分复现（`rescore.py`） | 比较指标数 **12**，不一致 **0**，可复现 **✅** |
+
+**表 D：全量指标明细**（官方判分器逐字产出，含全部次口径；
+同一张表也随包提交为 `bench_public/summary_table.md`）
+
+| 基准/指标 | 计划题数 | 有效返回数 | 实际计分数 | 请求/解析失败数 | 参考值 | 本次值 | 差值/单位 | 允许下降 | 判定 |
+|---|---|---|---|---|---|---|---|---|---|
+| RefSpatial / Location / upstream_scaled（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 68.00% | 68.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Placement / upstream_scaled（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 58.00% | 58.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Unseen / upstream_scaled（重叠子集（单列，不计入默认总分）） | 77 | 77 | 77 | 0 | 60.50%（论文，聚合口径未公开） | 48.05% | 48.05%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Location / upstream_raw（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 0.00% | 0.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Placement / upstream_raw（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 1.00% | 1.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Unseen / upstream_raw（重叠子集（单列，不计入默认总分）） | 77 | 77 | 77 | 0 | 60.50%（论文，聚合口径未公开） | 1.30% | 1.30%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Location / official_scaled（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 66.00% | 66.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Placement / official_scaled（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 58.00% | 58.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Unseen / official_scaled（重叠子集（单列，不计入默认总分）） | 77 | 77 | 77 | 0 | 60.50%（论文，聚合口径未公开） | 45.45% | 45.45%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Location / official_raw（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 0.00% | 0.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Placement / official_raw（默认范围） | 100 | 100 | 100 | 0 | 60.50%（论文，聚合口径未公开） | 1.00% | 1.00%（官方 CLI） | 未定义 | PASS（公开基准） |
+| RefSpatial / Unseen / official_raw（重叠子集（单列，不计入默认总分）） | 77 | 77 | 77 | 0 | 60.50%（论文，聚合口径未公开） | 1.30% | 1.30%（官方 CLI） | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / 3D Start | 100 | 100 | 100 | 0 | 83%（论文） | 0.00% | 0.00%；同集官方参照 RoboTracer_Intrinsics_Depth=75% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / 3D End | 100 | 100 | 100 | 0 | 63%（论文） | 0.00% | 0.00%；同集官方参照 RoboTracer_Intrinsics_Depth=57% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / Success | 100 | 100 | 100 | 0 | 44%（论文） | 0.00% | 0.00%；同集官方参照 RoboTracer_Intrinsics_Depth=52% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / 2D Start-in-Mask | 100 | 100 | 100 | 0 | — | 73.00% | 73.00%；同集官方参照 RoboTracer_Intrinsics_Depth=58% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / 2D End-in-BBox | 100 | 100 | 100 | 0 | — | 52.00% | 52.00%；同集官方参照 RoboTracer_Intrinsics_Depth=43% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / 2D DFD | 100 | 100 | 100 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.2055 | 0.2055 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / official / 3D DFD | 100 | 100 | 100 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.0000 | 0.0000 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 3D Start | 100 | 100 | 96 | 0 | 83%（论文） | 78.13% | 78.13%；同集官方参照 RoboTracer_Intrinsics_Depth=75% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 3D End | 100 | 100 | 96 | 0 | 63%（论文） | 63.54% | 63.54%；同集官方参照 RoboTracer_Intrinsics_Depth=57% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / Success | 100 | 100 | 96 | 0 | 44%（论文） | 46.88% | 46.88%；同集官方参照 RoboTracer_Intrinsics_Depth=52% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 2D Start-in-Mask | 100 | 100 | 96 | 0 | — | 72.92% | 72.92%；同集官方参照 RoboTracer_Intrinsics_Depth=58% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 2D End-in-BBox | 100 | 100 | 96 | 0 | — | 51.04% | 51.04%；同集官方参照 RoboTracer_Intrinsics_Depth=43% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / No-Collision Rate | 100 | 100 | 96 | 0 | — | 81.25% | 81.25% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 3D Start 距离(m) | 100 | 100 | 96 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.1268 | 0.1268 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 3D End 距离(m) | 100 | 100 | 96 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.1965 | 0.1965 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 2D DFD | 100 | 100 | 96 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.2057 | 0.2057 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / official / 3D DFD | 100 | 100 | 96 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.4151 | 0.4151 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / 3D Start | 100 | 100 | 100 | 0 | 83%（论文） | 0.00% | 0.00%；同集官方参照 RoboTracer_Intrinsics_Depth=75% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / 3D End | 100 | 100 | 100 | 0 | 63%（论文） | 0.00% | 0.00%；同集官方参照 RoboTracer_Intrinsics_Depth=57% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / Success | 100 | 100 | 100 | 0 | 44%（论文） | 0.00% | 0.00%；同集官方参照 RoboTracer_Intrinsics_Depth=52% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / 2D Start-in-Mask | 100 | 100 | 100 | 0 | — | 58.00% | 58.00%；同集官方参照 RoboTracer_Intrinsics_Depth=58% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / 2D End-in-BBox | 100 | 100 | 100 | 0 | — | 52.00% | 52.00%；同集官方参照 RoboTracer_Intrinsics_Depth=43% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / 2D DFD | 100 | 100 | 100 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.2682 | 0.2682 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 2D / upstream / 3D DFD | 100 | 100 | 100 | 0 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.0000 | 0.0000 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 3D Start | 100 | 98 | 95 | 2 | 83%（论文） | 63.16% | 63.16%；同集官方参照 RoboTracer_Intrinsics_Depth=75% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 3D End | 100 | 98 | 95 | 2 | 63%（论文） | 56.84% | 56.84%；同集官方参照 RoboTracer_Intrinsics_Depth=57% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / Success | 100 | 98 | 95 | 2 | 44%（论文） | 37.50% | 37.50%；同集官方参照 RoboTracer_Intrinsics_Depth=52% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 2D Start-in-Mask | 100 | 98 | 95 | 2 | — | 61.05% | 61.05%；同集官方参照 RoboTracer_Intrinsics_Depth=58% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 2D End-in-BBox | 100 | 98 | 95 | 2 | — | 46.32% | 46.32%；同集官方参照 RoboTracer_Intrinsics_Depth=43% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / No-Collision Rate | 100 | 98 | 95 | 2 | — | 83.16% | 83.16% | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 3D Start 距离(m) | 100 | 98 | 95 | 2 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.2912 | 0.2912 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 3D End 距离(m) | 100 | 98 | 95 | 2 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.2430 | 0.2430 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 2D DFD | 100 | 98 | 95 | 2 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.2582 | 0.2582 | 未定义 | PASS（公开基准） |
+| TraceSpatial / 3D / upstream / 3D DFD | 100 | 98 | 95 | 2 | 越低越好；RoboTracer_Intrinsics_Depth 见报告 | 0.5374 | 0.5374 | 未定义 | PASS（公开基准） |
+| CV-Bench / Acc(ADE20K) | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 77.88% | 77.88%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
+| CV-Bench / Acc(COCO) | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 85.96% | 85.96%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
+| CV-Bench / Acc(Omni3D) | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 94.33% | 94.33%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
+| CV-Bench / Acc_2D | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 81.92% | 81.92%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
+| CV-Bench / Acc_3D | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 94.33% | 94.33%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
+| CV-Bench / CV-Bench 综合分 | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 88.12% | 88.12%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
+
+> 表 D 的「实际计分数」是**官方判分器真正计分的分母**：
+> TraceSpatial 3D 子集为 **96/100**（官方脚本排除 4 条深景病态样本，见 §6.2.1）、
+> 2D 子集 2D DFD 计入路径均值的样本数为 **97/100**；
+> RefSpatial `Unseen` 77 条是**重叠子集**，不计入默认范围均值。
+
+
+<!-- /PUBLIC_BENCH_TABLE -->
 
 复现命令：
 
@@ -564,7 +680,7 @@ token 预算 / 抽图压缩 / thinking / 图像编码协议 8 组因子），我
 总像素 ≤3,000,000）会加密 ViT 的 patch 网格，小目标能占到更多 token。
 只跑 `Count` 788 题、图像与判分口径不变，唯一变量 = 缩放策略：
 
-<!-- UPSCALE_TABLE -->
+<!-- UPSCALE_TABLE:BEGIN -->
 
 结果（`Count` 788 题，同一会话，唯一变量 = 缩放策略；判分 = 官方 FlagEvalMM `get_result`）：
 
@@ -573,6 +689,8 @@ token 预算 / 抽图压缩 / thinking / 图像编码协议 8 组因子），我
 | `canonical_png`（同会话对照） | 63.74 | 78.25 | 71.00 | — |
 | **`up2_png`** | **65.79** | **82.06** | **73.93** | **+2.93** |
 | **`up2_jpeg95`** | **65.79** | **82.74** | **74.27** | **+3.27** |
+
+<!-- /UPSCALE_TABLE -->
 
 * `canonical_png` 对照复现出与另一次实验**完全一致**的 63.74 / 78.25
   → 本轮对 `common.py` 的改动是纯增量的、没动基线路径，且 CV-Bench 可复现。
@@ -617,6 +735,8 @@ token 预算 / 抽图压缩 / thinking / 图像编码协议 8 组因子），我
 又跑了一次**全量 2638 题**（`up2_png`、并发 48、**2837.5 s / 47.3 min**，在 59 min 硬上限内完成，
 2638/2638 终态 `ok`）：
 
+<!-- UPSCALE_FULL_TABLE:BEGIN -->
+
 | 指标 | 主口径 `canonical_png` | `up2_png`（诊断口径） | Δ |
 |---|---|---|---|
 | Acc(ADE20K) | 77.88 | 78.99 | **+1.11** |
@@ -624,6 +744,8 @@ token 预算 / 抽图压缩 / thinking / 图像编码协议 8 组因子），我
 | Acc_2D | 81.92 | 83.72 | **+1.80** |
 | Acc(Omni3D 3D) | 94.33 | 93.83 | **−0.50** |
 | **CV_score（官方综合分）** | **88.12** | **88.78** | **+0.66** |
+
+<!-- /UPSCALE_FULL_TABLE -->
 
 * 2D 分支 +1.80 pt（含 `Relation`，把 `Count` 的 +2.9~3.3 pt 摊薄）；
   **3D 分支反而 −0.50 pt**（上采样对 3D 空间感知无益）；
