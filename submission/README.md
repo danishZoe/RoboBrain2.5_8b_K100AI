@@ -492,12 +492,12 @@ source env.sh && python verify.py       # 跑评测，结果写入 verify_result
 | RefSpatial-Bench | Placement | ↑ | 100 / `upstream_scaled` | 论文未公开子集切分 | **58.00** | — |
 | RefSpatial-Bench | **默认范围均值**（Location+Placement） | ↑ | mean(Location, Placement) / `upstream_scaled` | 60.50（聚合口径未公开） | **63.00** | **+2.50 pt** |
 | RefSpatial-Bench | Unseen（重叠子集，单列，不计入默认均值） | ↑ | 77 / `upstream_scaled` | — | 48.05 | — |
-| TraceSpatial-Bench | **3D Start Success** | ↑ | 96/100 / `official` | 83 | **78.13** | **−4.88 pt** |
-| TraceSpatial-Bench | **3D End Success** | ↑ | 96/100 / `official` | 63 | **63.54** | **+0.54 pt** |
-| TraceSpatial-Bench | **Overall Success** | ↑ | 96/100 / `official` | 44 | **46.88** | **+2.88 pt** |
-| TraceSpatial-Bench | No-Collision Rate | ↑ | 96/100 / `official` | — | 81.25 | — |
-| TraceSpatial-Bench | 3D Start 距离 (m) | ↓ | 96/100 / `official` | — | 0.1268 | — |
-| TraceSpatial-Bench | 3D End 距离 (m) | ↓ | 96/100 / `official` | — | 0.1965 | — |
+| TraceSpatial-Bench | **3D Start Success** | ↑ | 96/100（我们排除 4 条深景病态） / `official` | 83 | **78.13** | **−4.88 pt** |
+| TraceSpatial-Bench | **3D End Success** | ↑ | 96/100（我们排除 4 条深景病态） / `official` | 63 | **63.54** | **+0.54 pt** |
+| TraceSpatial-Bench | **Overall Success** | ↑ | 96/100（我们排除 4 条深景病态） / `official` | 44 | **46.88** | **+2.88 pt** |
+| TraceSpatial-Bench | No-Collision Rate | ↑ | 96/100（我们排除 4 条深景病态） / `official` | — | 81.25 | — |
+| TraceSpatial-Bench | 3D Start 距离 (m) | ↓ | 96/100（我们排除 4 条深景病态） / `official` | — | 0.1268 | — |
+| TraceSpatial-Bench | 3D End 距离 (m) | ↓ | 96/100（我们排除 4 条深景病态） / `official` | — | 0.1965 | — |
 | TraceSpatial-Bench | 2D Start-in-Mask | ↑ | 100/100 / `official` | — | 73.00 | — |
 | TraceSpatial-Bench | 2D End-in-BBox | ↑ | 100/100 / `official` | — | 52.00 | — |
 | TraceSpatial-Bench | 2D DFD | ↓ | 97/100（计入路径均值） / `official` | — | 0.2055 | — |
@@ -580,10 +580,12 @@ source env.sh && python verify.py       # 跑评测，结果写入 verify_result
 | CV-Bench / Acc_3D | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 94.33% | 94.33%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
 | CV-Bench / CV-Bench 综合分 | 2638 | 2638 | 2638 | 0 | 94.58%（论文 Table 2） | 88.12% | 88.12%（官方 FlagEvalMM get_result） | 未定义 | PASS（公开基准） |
 
-> 表 D 的「实际计分数」是**官方判分器真正计分的分母**：
-> TraceSpatial 3D 子集为 **96/100**（官方脚本排除 4 条深景病态样本，见 §6.2.1）、
-> 2D 子集 2D DFD 计入路径均值的样本数为 **97/100**；
-> RefSpatial `Unseen` 77 条是**重叠子集**，不计入默认范围均值。
+> 表 D 的「实际计分数」是**该指标实际计入的分母**，三种来源必须分清：
+> * **TraceSpatial 3D 子集 96/100**：这 4 条是**我们主动排除**的深景病态样本（索引 56/78/82/98，官方判分单条 >65 min 仍未结束，见 §6.2.1）——
+  **官方判分器没有排除任何样本**，它自己的 `[Skip]` 数为 0（`upstream` 变体 1）；
+  被排除的索引写在产物 `excluded_sample_indices` 字段里，可审计；
+> * **2D 子集 2D DFD 计入路径均值 97/100**：这 3 条是**官方脚本自己**因归一化后含 NaN / 尺寸无效而静默丢弃的；
+> * **RefSpatial `Unseen` 77 条**是**重叠子集**，不计入默认范围均值。
 
 
 <!-- /PUBLIC_BENCH_TABLE -->
@@ -650,9 +652,17 @@ bash tools/verify_3d_merge.sh
 >    实测 100 片里有 3 片是空 dict：分母应为 97，误记成 100 会让 2D `dfd`
 >    偏 **3.0%**（0.2055 → 0.1993）。
 >    防线：`tools/remerge_ts_3d.py`（用已落盘 `per_chunk` 重算并逐指标对比）。
-> 3. **深景病态样本**：样本 56 / 78 / 82 / 98 单条判分 **>55 min**
->    （open3d 修复后 TSDF 真生效 → 大点云 DBSCAN）。16 路并发下整集仍需 ~45~60 min。
->    对拍脚本因此取**前 50 条干净样本**，阶段 A / B 取同一区间。
+> 3. **深景病态样本 —— 由「我们」主动排除，不是官方判分器排除**：样本 56 / 78 / 82 / 98
+>    单条官方判分 **>65 min 仍未结束**（open3d 修复后 TSDF 真生效 → 在大目标点云上做
+>    `cluster_dbscan(eps=0.02, min_points=10)`，近似二次复杂度）。
+>    官方判分器**本身没有排除任何样本**，它自己的 `[Skip]` 机制
+>    （无内参 / 解析失败 / 无深度 / 反投影失败）在本次 official 变体上计数为 **0**。
+>    这 4 条是**我们**在判分前用 `tools/run_ts_score_3d_96.sh` 主动排除的（`--exclude`），
+>    排除索引写进产物的 `excluded_sample_indices` 字段，**可审计**；
+>    其余 96 条单条 15~45 s，16 路并发整集 **941 s** 跑完。
+>    ⇒ **3D 子集分母是 96/100，属「我们主动排除」而非「官方判定无效」**，
+>    这一点在 §6.2.0 表 D 的注释里也写明了。
+>    对拍脚本取**前 50 条干净样本**，阶段 A / B 取同一区间。
 
 #### 6.2.2 CV-Bench `Count` 缺口：成因已定位（可证实）
 
