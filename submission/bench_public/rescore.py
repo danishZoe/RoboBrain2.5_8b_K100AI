@@ -70,29 +70,62 @@ def rescore_refspatial(root: str) -> Dict[str, Any]:
             "all_match": all(r["match"] for r in rows) if rows else None}
 
 
-def rescore_tracespatial(root: str) -> Dict[str, Any]:
+def rescore_tracespatial(root: str, stage: str = "compare") -> Dict[str, Any]:
+    """TraceSpatial 离线重判分。
+
+    ``stage='rescore'``：并行重跑官方判分 CLI，把**原始指标**写到
+    ``tracespatial/rescore_raw.json``（这一步不依赖 summary.json，可与
+    ``run_tracespatial.py --stage score`` 同时跑，节省一整轮 45 分钟）。
+    ``stage='compare'``：读 summary.json 与 rescore_raw.json 逐指标比对。
+    """
     out_dir = os.path.join(root, "tracespatial")
     sp = os.path.join(out_dir, "summary.json")
     if not os.path.exists(sp):
         return {"status": "NOT_RUN", "reason": "缺少 %s" % sp}
     base = json.load(open(sp, encoding="utf-8"))
-    rows = []
+
+    pairs = []
     for variant, vinfo in base.get("variants", {}).items():
         for task, tinfo in vinfo.get("tasks", {}).items():
-            if not tinfo.get("official_jsonl"):
-                continue
-            sc = RT.score_official_cli(out_dir, variant, task)
-            o = tinfo.get("scores", {})
-            for key in ("metrics_2d", "metrics_3d", "start_success_rate",
-                        "end_success_rate", "overall_success_rate",
-                        "no_collision_rate", "start_in_mask", "end_in_bbox"):
-                rows.append({
-                    "dataset": "TraceSpatial-Bench", "variant": variant,
-                    "split": task, "metric": key,
-                    "first": o.get(key), "rescored": sc.get(key),
-                    "match": o.get(key) == sc.get(key),
-                })
-    return {"status": "OK", "rows": rows,
+            if tinfo.get("official_jsonl"):
+                pairs.append((variant, task))
+
+    raw_path = os.path.join(out_dir, "rescore_raw.json")
+    if stage == "rescore":
+        pending = []
+        for variant, task in pairs:
+            print("[rescore] 启动官方判分重跑 %s/%s ..." % (variant, task), flush=True)
+            pending.append((variant, task,
+                            RT.score_official_cli_launch(out_dir, variant, task)))
+        raw = {}
+        for variant, task, h in pending:
+            sc = RT.score_official_cli_collect(h)
+            raw.setdefault(variant, {})[task] = sc
+            print("[rescore] %s/%s 完成" % (variant, task), flush=True)
+        C.dump_json(raw_path, raw)
+        print("[rescore] 原始重判分结果 -> %s" % raw_path)
+        return {"status": "OK", "stage": "rescore", "raw_path": raw_path,
+                "pairs": ["%s/%s" % p for p in pairs]}
+
+    # stage == 'compare'
+    if not os.path.exists(raw_path):
+        print("[rescore] 未找到 %s，先执行 rescore 阶段" % raw_path)
+        rescore_tracespatial(root, stage="rescore")
+    raw = json.load(open(raw_path, encoding="utf-8"))
+    rows = []
+    for variant, task in pairs:
+        sc = raw.get(variant, {}).get(task) or {}
+        o = base["variants"][variant]["tasks"][task].get("scores", {})
+        for key in ("metrics_2d", "metrics_3d", "start_success_rate",
+                    "end_success_rate", "overall_success_rate",
+                    "no_collision_rate", "start_in_mask", "end_in_bbox"):
+            rows.append({
+                "dataset": "TraceSpatial-Bench", "variant": variant,
+                "split": task, "metric": key,
+                "first": o.get(key), "rescored": sc.get(key),
+                "match": o.get(key) == sc.get(key),
+            })
+    return {"status": "OK", "stage": "compare", "rows": rows,
             "all_match": all(r["match"] for r in rows) if rows else None}
 
 
@@ -122,11 +155,24 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench-root",
                     default=os.path.join(C.WORK_DIR, "outputs/bench_public"))
+    ap.add_argument("--stage", default="compare", choices=("compare", "rescore"),
+                    help="rescore=只重跑判分并落原始指标（可与正式判分并行）；"
+                         "compare=读 summary.json 与原始指标逐项比对")
     args = ap.parse_args()
+
+    if args.stage == "rescore":
+        report = {
+            "refspatial": rescore_refspatial(args.bench_root),
+            "tracespatial": rescore_tracespatial(args.bench_root, stage="rescore"),
+            "cvbench": rescore_cvbench(args.bench_root),
+        }
+        C.dump_json(os.path.join(args.bench_root, "rescore_raw.json"), report)
+        print("[rescore] stage=rescore 完成")
+        return 0
 
     report = {
         "refspatial": rescore_refspatial(args.bench_root),
-        "tracespatial": rescore_tracespatial(args.bench_root),
+        "tracespatial": rescore_tracespatial(args.bench_root, stage="compare"),
         "cvbench": rescore_cvbench(args.bench_root),
     }
     n_rows = 0

@@ -16,7 +16,7 @@ export TRANSFORMERS_CACHE="$WS/cache/hf/transformers"
 export TORCH_HOME="$WS/cache/torch"
 export XDG_CACHE_HOME="$WS/cache/xdg"
 export TMPDIR="$WS/tmp"
-export PYTHONPATH="$WS/envs/pylibs:$WS/third_party/upstream_eval/FlagEvalMM:${PYTHONPATH:-}"
+export PYTHONPATH="$WS/envs/pylibs_core:$WS/third_party/upstream_eval/FlagEvalMM:${PYTHONPATH:-}"
 export PYTHONWARNINGS="ignore"
 mkdir -p "$TMPDIR" "$WS/logs"
 

@@ -96,7 +96,8 @@ def extract_answer(raw: str, parse_think) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # 推理
 # --------------------------------------------------------------------------- #
-def build_jobs(limit: int, img_dir: str | None) -> Dict[str, Any]:
+def build_jobs(limit: int, img_dir: str | None,
+               task_filter: str = "", prompt_style: str = "flagevalmm") -> Dict[str, Any]:
     """构造 annotations（官方评分用）与 jobs（推理用）。"""
     annotations: Dict[str, Any] = {}
     jobs: List[Dict[str, Any]] = []
@@ -106,10 +107,18 @@ def build_jobs(limit: int, img_dir: str | None) -> Dict[str, Any]:
     if mapfile and os.path.exists(mapfile):
         for row in json.load(open(mapfile, encoding="utf-8")):
             imgmap[row["question_id"]] = row["file"]
+    keep = {t.strip() for t in (task_filter or "").split(",") if t.strip()}
+
+    def make_prompt(ann: Dict[str, Any]) -> str:
+        if prompt_style == "dataset":
+            return C.prompt_cv_bench_dataset(ann.get("prompt_official") or "")
+        return C.prompt_cv_bench_flag_eval_mm(ann["question"], ann["options"])
 
     for ann, data in D.iter_cvbench():
         if limit and len(jobs) >= limit:
             break
+        if keep and (ann.get("task") or "") not in keep:
+            continue
         qid = ann["question_id"]
         annotations[qid] = {
             "question_id": qid,
@@ -130,8 +139,7 @@ def build_jobs(limit: int, img_dir: str | None) -> Dict[str, Any]:
             "sample_id": f"CVBench/{qid}",
             "split": ann["type_ori"],
             "image_paths": refs,
-            "prompt": C.prompt_cv_bench_flag_eval_mm(ann["question"],
-                                                     ann["options"]),
+            "prompt": make_prompt(ann),
             "fields": annotations[qid],
             "task": None,
         })
@@ -144,11 +152,11 @@ def build_jobs(limit: int, img_dir: str | None) -> Dict[str, Any]:
 def score_official(out_dir: str, annotations_path: str,
                    predictions_path: str) -> Dict[str, Any]:
     code = (
-        "import sys, json, importlib.util\n"
+        "import sys, json, os\n"
         "sys.path.insert(0, %r)\n"
-        "spec = importlib.util.spec_from_file_location('cv_bench_evaluate', %r)\n"
-        "mod = importlib.util.module_from_spec(spec)\n"
-        "spec.loader.exec_module(mod)\n"
+        "sys.path.insert(0, %r)\n"
+        "import official_flagevalmm as OF\n"
+        "mod = OF.load_cv_bench_evaluate()\n"
         "annotations = json.load(open(%r, encoding='utf-8'))\n"
         "predictions = json.load(open(%r, encoding='utf-8'))\n"
         "res = mod.get_result(annotations, predictions)\n"
@@ -157,14 +165,15 @@ def score_official(out_dir: str, annotations_path: str,
         "          ensure_ascii=False, indent=2, default=str)\n"
         "print(json.dumps({k: v for k, v in res.items() if k != 'scored_predictions'},\n"
         "                 ensure_ascii=False, indent=2, default=str))\n"
-        % (FLAG_EVAL_MM, OFFICIAL_EVAL, annotations_path, predictions_path)
+        % (FLAG_EVAL_MM, os.path.dirname(os.path.abspath(__file__)),
+           annotations_path, predictions_path)
     )
     tmp = os.path.join(out_dir, "_score_cv_bench.py")
     with open(tmp, "w", encoding="utf-8") as fh:
         fh.write(code)
     env = dict(os.environ)
     env["PYTHONPATH"] = (env.get("PYTHONPATH", "") + os.pathsep + FLAG_EVAL_MM +
-                          os.pathsep + os.path.join(C.WORK_DIR, "envs/pylibs"))
+                          os.pathsep + os.path.join(C.WORK_DIR, "envs/pylibs_core"))
     env["PYTHONWARNINGS"] = "ignore"
     r = subprocess.run([sys.executable, tmp], cwd=out_dir, env=env,
                        capture_output=True, text=True, timeout=7200)
@@ -193,11 +202,25 @@ def main() -> int:
                                          "outputs/bench_public/manifest/cvbench_images"))
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--max-tokens", type=int, default=C.MAX_NEW_TOKENS)
-    ap.add_argument("--concurrency", type=int, default=8)
+    ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--run-id", default="cvbench-baseline")
     ap.add_argument("--no-guard", action="store_true")
     ap.add_argument("--no-resume", action="store_true")
+    ap.add_argument("--image-protocol", default="canonical_png",
+                    choices=list(C.IMAGE_PROTOCOLS),
+                    help="图像输入协议：预缩放(qwen_vl_utils) × 编码(PNG/JPEG q95)。"
+                         "官方 FlagEvalMM 路径 = raw_jpeg95")
+    ap.add_argument("--task-filter", default="",
+                    help="只跑指定 task（如 Count）；逗号分隔，空=全部")
+    ap.add_argument("--prompt-style", default="flagevalmm",
+                    choices=["flagevalmm", "dataset"],
+                    help="提示词口径：flagevalmm=官方 FlagEvalMM build_prompt 逐字复刻"
+                         "（默认）；dataset=CV-Bench 数据集自带的 prompt 字段"
+                         "（Cambrian-1 原始口径）")
     args = ap.parse_args()
+
+    C.set_image_protocol(args.image_protocol)
+    print("[cvbench] 图像输入协议 = %s" % args.image_protocol)
 
     if not args.no_guard:
         try:
@@ -210,7 +233,7 @@ def main() -> int:
         return 1
 
     os.makedirs(args.out_dir, exist_ok=True)
-    built = build_jobs(args.limit, args.img_dir)
+    built = build_jobs(args.limit, args.img_dir, args.task_filter, args.prompt_style)
     annotations = built["annotations"]
     jobs = built["jobs"]
     print("[cvbench] 题目数 %d，分组 %s" %
@@ -273,6 +296,16 @@ def main() -> int:
                             "RoboBrain adapter (<think></think><answer>)",
             "answer_extraction": "官方 parse_think_answer_string + "
                                   "evaluate_multiple_choice（None 兜底已披露）",
+            "image_protocol": args.image_protocol,
+            "image_protocol_note": "canonical=先用上游 qwen_vl_utils 做 28 倍数重采样；"
+                                   "raw=不预缩放；jpeg95=官方 FlagEvalMM encode_image 的"
+                                   " JPEG q95 编码；png=无损 PNG；"
+                                   "up2/up4=上采样（LANCZOS，总像素≤3,000,000）",
+            "prompt_style": args.prompt_style,
+            "prompt_style_note": "flagevalmm=FlagEvalMM build_prompt 逐字复刻；"
+                                 "dataset=CV-Bench 数据集自带 prompt 字段"
+                                 "（'(A) x' 标记 + 'Select from the following choices.'）",
+            "task_filter": args.task_filter or "(全部)",
         },
         "scorer": "FlagEvalMM/tasks/cv_bench/evaluate.py::get_result (official)",
         "n_planned": len(jobs),

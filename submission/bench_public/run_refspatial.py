@@ -121,7 +121,7 @@ def run_variant(variant: str, prompt_mode: str, scale_mode: str,
         # 落成官方 jsonl 字段
         official_jsonl = os.path.join(model_dir, f"{split}.jsonl")
         with open(official_jsonl, "w", encoding="utf-8") as fh:
-            for s in samples:
+            for s in jobs:
                 r = by_id.get(s["sample_id"], {})
                 raw = r.get("raw_output", "")
                 text = raw
@@ -245,17 +245,31 @@ def score_flagevalmm_norm1k(out_dir: str, variant: str, split: str) -> Dict[str,
     run_dir = os.path.join(out_dir, variant)
     model_id = f"{OFFICIAL_MODEL_PREFIX}_{variant}"
     jsonl = os.path.join(run_dir, "outputs", model_id, f"{split}.jsonl")
+    pred_jsonl = os.path.join(run_dir, "predictions", f"{split}.jsonl")
     code = (
         "import sys, json, os, numpy as np\n"
         "sys.path.insert(0, %r)\n"
-        "from flagevalmm.evaluator.point_utils import text2pts_norm1k, calculate_mask_score\n"
+        "sys.path.insert(0, %r)\n"
+        "import official_flagevalmm as OF\n"
+        "P = OF.load_point_utils()\n"
         "from PIL import Image\n"
         "answers = [json.loads(l) for l in open(%r, encoding='utf-8') if l.strip()]\n"
+        "# 取**模型原始输出**（0~1000 相对坐标）而不是官方 jsonl 里的 text：\n"
+        "# scaled 变体的 text 已被换算成像素，套 norm1k 没有语义。\n"
+        "raw = {}\n"
+        "if os.path.exists(%r):\n"
+        "    for l in open(%r, encoding='utf-8'):\n"
+        "        if not l.strip():\n"
+        "            continue\n"
+        "        r = json.loads(l)\n"
+        "        sid = str(r.get('sample_id') or '')\n"
+        "        raw[sid.split('/', 1)[-1]] = r.get('raw_output') or ''\n"
         "scores = []\n"
         "for a in answers:\n"
-        "    mask = Image.open(os.path.join(%r, a['mask_path']))\n"
-        "    pts = text2pts_norm1k(a.get('text',''), width=mask.size[0], height=mask.size[1])\n"
-        "    scores.append(calculate_mask_score(pts, mask))\n"
+        "    mask = Image.open(os.path.join(%r, %r, a['mask_path']))\n"
+        "    txt = raw.get(str(a.get('question_id')), a.get('text', ''))\n"
+        "    pts = P.text2pts_norm1k(txt, width=mask.size[0], height=mask.size[1])\n"
+        "    scores.append(P.calculate_mask_score(pts, mask))\n"
         "out = {'n': len(scores), 'mean_accuracy': float(np.mean(scores)) if scores else 0.0,\n"
         "       'per_sample': [{'question_id': a.get('question_id'), 'accuracy': s}\n"
         "                       for a, s in zip(answers, scores)]}\n"
@@ -263,7 +277,9 @@ def score_flagevalmm_norm1k(out_dir: str, variant: str, split: str) -> Dict[str,
         "          ensure_ascii=False, indent=2)\n"
         "print('[flagevalmm-norm1k] n=%%d mean=%%.4f' %% (out['n'], out['mean_accuracy']))\n"
         % (os.path.join(C.WORK_DIR, "third_party/upstream_eval/FlagEvalMM"),
-           jsonl, D.REFSPATIAL_DIR, split)
+           os.path.dirname(os.path.abspath(__file__)),
+           jsonl, pred_jsonl, pred_jsonl,
+           D.REFSPATIAL_DIR, split, split)
     )
     tmp = os.path.join(run_dir, f"_score_norm1k_{split}.py")
     with open(tmp, "w", encoding="utf-8") as fh:
@@ -272,7 +288,7 @@ def score_flagevalmm_norm1k(out_dir: str, variant: str, split: str) -> Dict[str,
     env["PYTHONPATH"] = (env.get("PYTHONPATH", "") + os.pathsep +
                           os.path.join(C.WORK_DIR,
                                        "third_party/upstream_eval/FlagEvalMM") +
-                          os.pathsep + os.path.join(C.WORK_DIR, "envs/pylibs"))
+                          os.pathsep + os.path.join(C.WORK_DIR, "envs/pylibs_core"))
     env["PYTHONWARNINGS"] = "ignore"
     r = subprocess.run([sys.executable, tmp], cwd=run_dir, env=env,
                        capture_output=True, text=True, timeout=3600)
@@ -297,7 +313,7 @@ def main() -> int:
     ap.add_argument("--splits", default=",".join(DEFAULT_SPLITS))
     ap.add_argument("--limit", type=int, default=0, help="每个 split 的题数上限（0=全部）")
     ap.add_argument("--max-tokens", type=int, default=C.MAX_NEW_TOKENS)
-    ap.add_argument("--concurrency", type=int, default=8)
+    ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--run-id", default="refspatial-baseline")
     ap.add_argument("--no-guard", action="store_true")
     ap.add_argument("--no-resume", action="store_true")

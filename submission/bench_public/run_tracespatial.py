@@ -57,12 +57,31 @@ TASKS = ("2D", "3D")
 # open3d 的依赖链带 numpy 2.x，与系统 numpy 1.25（torch 编译基线）冲突，
 # 因此 open3d 单独放在 envs/pylibs_o3d，**只**给官方判分子进程使用。
 O3D_PREFIX = os.path.join(C.WORK_DIR, "envs/pylibs_o3d")
-BASE_PREFIX = os.path.join(C.WORK_DIR, "envs/pylibs")
+BASE_PREFIX = os.path.join(C.WORK_DIR, "envs/pylibs_core")
 
 
 def scoring_pythonpath() -> str:
-    return os.pathsep.join([O3D_PREFIX, BASE_PREFIX,
-                             os.environ.get("PYTHONPATH", "")])
+    """判分子进程的前缀顺序。
+
+    1. ``envs/pylibs_o3d``：open3d + numpy 2.x（open3d 0.20 按 numpy2 ABI 编译，
+       与系统 numpy 1.25 不兼容，因此 numpy 也放在这里且必须排在最前）；
+    2. ``envs/pylibs``：open3d 的其余依赖（dash / pydantic 等）；
+    3. ``envs/pylibs_core``：通用依赖（不含 numpy，保证其它进程用系统 numpy 1.25）。
+
+    ⚠️ ``ROBO_O3D_PREFIX`` 可覆盖第 1 项，用于切换 open3d 版本。
+    open3d 0.19/0.20 的 ``ScalableTSDFVolume`` 改了体素语义（新增
+    ``volume_unit_resolution`` / ``depth_sampling_stride``），在官方脚本给定的
+    ``voxel_length=0.02, sdf_trunc=0.08`` 下 **抽不出任何点**，会让官方 3D 碰撞
+    检查必然抛 ValueError（碰撞标志恒 False、No-Collision 恒 1.0）。详见
+    ``reports/16_public_bench_results.md`` §5.6。
+    """
+    o3d_prefix = os.environ.get("ROBO_O3D_PREFIX") or O3D_PREFIX
+    return os.pathsep.join([
+        o3d_prefix,
+        os.path.join(C.WORK_DIR, "envs/pylibs"),
+        BASE_PREFIX,
+        os.environ.get("PYTHONPATH", ""),
+    ])
 
 
 def build_prompt(variant: str, task_name: str, raw_prompt: str,
@@ -98,11 +117,14 @@ def run_variant(variant: str, tasks: List[str], args) -> Dict[str, Any]:
             jobs.append(s)
 
         pred_path = os.path.join(out_root, "predictions", f"{task_name}.jsonl")
+        # 2D 任务的输出可能是 2 元组（official 变体）或 3 元组（upstream 变体），
+        # 用 trajectory_2d 模式两种都接受，避免把合法输出误判成 parse_failed。
+        parse_task = "trajectory_2d" if task_name == "2D" else "trajectory"
         recs = E.run_jobs(
             jobs, pred_path, args.url, args.model,
             max_tokens=args.max_tokens, concurrency=args.concurrency,
             resume=not args.no_resume,
-            parse_fn=lambda t: C.parse_points_1000(t, "trajectory"),
+            parse_fn=lambda t: C.parse_points_1000(t, parse_task),
             label=f"[tracespatial {variant}/{task_name}]",
         )
         by_id = {r["sample_id"]: r for r in recs}
@@ -112,7 +134,7 @@ def run_variant(variant: str, tasks: List[str], args) -> Dict[str, Any]:
         os.makedirs(model_dir, exist_ok=True)
         official_jsonl = os.path.join(model_dir, f"{mid}_{task_name}.jsonl")
         with open(official_jsonl, "w", encoding="utf-8") as fh:
-            for s in samples:
+            for s in jobs:
                 r = by_id.get(s["sample_id"], {})
                 rec = dict(s["fields"])
                 rec["final_prompt"] = s["prompt"]
@@ -136,7 +158,23 @@ def _count_states(recs: List[Dict[str, Any]]) -> Dict[str, int]:
 
 
 def score_official_cli(out_dir: str, variant: str, task_name: str) -> Dict[str, Any]:
-    """逐字运行官方 summarize_acc.py CLI。"""
+    """逐字运行官方 summarize_acc.py CLI（串行版，供单点调用使用）。"""
+    return score_official_cli_collect(
+        score_official_cli_launch(out_dir, variant, task_name))
+
+
+def score_official_cli_launch(out_dir: str, variant: str, task_name: str):
+    """启动官方 summarize_acc.py CLI（不等待）。
+
+    官方 3D 判分是**单进程单核**的（TSDF 体素化 + DBSCAN 去噪），
+    单变体实测约 45 分钟。本机的 3D 判分（2 个变体 × 2 个任务 = 4 次）
+    彼此**完全独立**——官方脚本只读 ``outputs/<model_id>_<task>.jsonl`` 并
+    往 stdout 打印聚合指标，不写任何文件——因此可以**同时**启动 4 个官方 CLI
+    进程并行判分。
+
+    ⚠️ 被调用的仍然是**未经改动的官方 ``summarize_acc.py``**（逐字 CLI 调用），
+    这里只改变**并发调度**，不改变判分逻辑、阈值、插值与聚合规则。
+    """
     run_dir = os.path.join(out_dir, variant)
     link = os.path.join(run_dir, "TraceSpatial-Bench")
     if not os.path.exists(link):
@@ -147,10 +185,18 @@ def score_official_cli(out_dir: str, variant: str, task_name: str) -> Dict[str, 
     env["PYTHONWARNINGS"] = "ignore"
     cmd = [sys.executable, os.path.join(ROBOTRACER, "summarize_acc.py"),
            "--model_name", mid, "--task_name", task_name]
-    r = subprocess.run(cmd, cwd=run_dir, env=env, capture_output=True,
-                       text=True, timeout=7200)
-    out = {"cmd": " ".join(cmd), "cwd": run_dir, "returncode": r.returncode,
-           "stdout": r.stdout, "stderr": r.stderr[-1500:]}
+    proc = subprocess.Popen(cmd, cwd=run_dir, env=env,
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True)
+    return {"proc": proc, "cmd": " ".join(cmd), "cwd": run_dir}
+
+
+def score_official_cli_collect(handle) -> Dict[str, Any]:
+    """等待一次官方 CLI 判分结束并解析其 stdout。"""
+    proc = handle["proc"]
+    stdout, stderr = proc.communicate(timeout=7200)
+    out = {"cmd": handle["cmd"], "cwd": handle["cwd"], "returncode": proc.returncode,
+           "stdout": stdout, "stderr": stderr[-1500:]}
     out["metrics_2d"] = _grab(out["stdout"], "2D Path Metrics (Normalized [0,1])")
     out["start_in_mask"] = _grab(out["stdout"], "2D Start-in-Mask Rate")
     out["end_in_bbox"] = _grab(out["stdout"], "2D End-in-2D-BBox Rate")
@@ -170,9 +216,14 @@ def score_official_cli(out_dir: str, variant: str, task_name: str) -> Dict[str, 
 
 
 def _grab(text: str, key: str):
+    """取以 ``key`` 开头的行，去掉前缀后剩余部分。
+
+    ⚠️ 官方打印成 ``Key: value``，截取后必须去掉行首冒号，
+    否则 ``": 0.7300"`` 不能直接当数值用。
+    """
     for line in text.splitlines():
         if line.startswith(key):
-            return line[len(key):].strip()
+            return line[len(key):].lstrip(":").strip()
     return None
 
 
@@ -197,69 +248,105 @@ def main() -> int:
     ap.add_argument("--tasks", default=",".join(TASKS))
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--max-tokens", type=int, default=C.MAX_NEW_TOKENS)
-    ap.add_argument("--concurrency", type=int, default=8)
+    ap.add_argument("--concurrency", type=int, default=16)
     ap.add_argument("--run-id", default="tracespatial-baseline")
     ap.add_argument("--no-guard", action="store_true")
     ap.add_argument("--no-resume", action="store_true")
+    ap.add_argument("--stage", default="all", choices=("all", "infer", "score"),
+                    help="all=推理+判分；infer=只推理并落盘；score=只对已落盘的"
+                         "预测跑官方判分（可与 rescore 并行）")
     args = ap.parse_args()
 
     print("[tracespatial] 提示词一致性自检")
     if not C.selfcheck_prompt_parity():
         print("[tracespatial] 警告：上游提示词与 robo_infer 不一致，仍继续但请人工确认")
 
-    if not args.no_guard:
-        try:
-            C.guard_no_official_bench()
-        except RuntimeError as exc:
-            print("[tracespatial] %s" % exc)
-            return 3
+    # --stage score 不发任何请求，不需要服务在线，也不需要压测安全闸
+    if args.stage != "score":
+        if not args.no_guard:
+            try:
+                C.guard_no_official_bench()
+            except RuntimeError as exc:
+                print("[tracespatial] %s" % exc)
+                return 3
 
-    if not C.service_alive(args.url):
-        print("[tracespatial] 服务不可用：%s" % args.url)
-        return 1
+        if not C.service_alive(args.url):
+            print("[tracespatial] 服务不可用：%s" % args.url)
+            return 1
 
     o3d = check_open3d()
     print("[tracespatial] open3d 状态: %s" % o3d.get("stdout"))
 
     os.makedirs(args.out_dir, exist_ok=True)
     tasks = [t.strip() for t in args.tasks.split(",") if t.strip()]
+    variants = [v.strip() for v in args.variants.split(",") if v.strip()]
+    summary_path = os.path.join(args.out_dir, "summary.json")
 
-    summary: Dict[str, Any] = {
-        "run_id": args.run_id,
-        "dataset": "TraceSpatial-Bench",
-        "dataset_source": D.DATASET_SOURCES["TraceSpatial-Bench"],
-        "protocol": {
-            "decode": C.DECODE,
-            "max_tokens": args.max_tokens,
-            "concurrency": args.concurrency,
-            "images_per_sample": C.IMAGES_PER_SAMPLE,
-            "coordinate_contract": "0~1000 (x,y) + depth in meters; no scaling needed",
-            "model_input_depth_or_intrinsics": False,
-            "note": "深度与内参仅判分需要，不作为模型输入",
-        },
-        "scorer": "RoboTracer/Evaluation/summarize_acc.py (official CLI, verbatim)",
-        "open3d": o3d,
-        "variants": {},
-    }
+    if args.stage == "score":
+        # 只判分：沿用已落盘的 summary（推理阶段写好的）
+        if not os.path.exists(summary_path):
+            print("[tracespatial] --stage score 需要先跑 --stage infer（缺 %s）"
+                  % summary_path)
+            return 1
+        summary = json.load(open(summary_path, encoding="utf-8"))
+        missing = [v for v in variants if v not in summary.get("variants", {})]
+        if missing:
+            print("[tracespatial] summary 缺少变体 %s，请先跑 --stage infer" % missing)
+            return 1
+        for v in variants:
+            for t in tasks:
+                oj = os.path.join(args.out_dir, v, "outputs",
+                                  "%s_%s.jsonl" % (model_id_for(v), t))
+                if not os.path.exists(oj):
+                    print("[tracespatial] 缺官方输入 %s" % oj)
+                    return 1
+    else:
+        summary = {
+            "run_id": args.run_id,
+            "dataset": "TraceSpatial-Bench",
+            "dataset_source": D.DATASET_SOURCES["TraceSpatial-Bench"],
+            "protocol": {
+                "decode": C.DECODE,
+                "max_tokens": args.max_tokens,
+                "concurrency": args.concurrency,
+                "images_per_sample": C.IMAGES_PER_SAMPLE,
+                "coordinate_contract": "0~1000 (x,y) + depth in meters; no scaling needed",
+                "model_input_depth_or_intrinsics": False,
+                "note": "深度与内参仅判分需要，不作为模型输入",
+            },
+            "scorer": "RoboTracer/Evaluation/summarize_acc.py (official CLI, verbatim)",
+            "open3d": o3d,
+            "variants": {},
+        }
+        for variant in variants:
+            print("\n########## variant=%s ##########" % variant, flush=True)
+            summary["variants"][variant] = run_variant(variant, tasks, args)
+        # 推理阶段先落一次 summary，便于 --stage score / rescore 并行复用
+        C.dump_json(summary_path, summary)
 
-    for variant in [v.strip() for v in args.variants.split(",") if v.strip()]:
-        print("\n########## variant=%s ##########" % variant, flush=True)
-        vinfo = run_variant(variant, tasks, args)
-        for task_name in tasks:
-            sc = score_official_cli(args.out_dir, variant, task_name)
-            vinfo["tasks"][task_name]["scores"] = sc
+    if args.stage in ("all", "score"):
+        # ---- 官方判分：4 个 (变体 × 任务) 互相独立，并行启动 ----
+        pending = []
+        for variant in variants:
+            for task_name in tasks:
+                print("[tracespatial] 启动官方判分 %s/%s ..." % (variant, task_name),
+                      flush=True)
+                pending.append((variant, task_name,
+                                score_official_cli_launch(args.out_dir, variant,
+                                                          task_name)))
+        for variant, task_name, h in pending:
+            sc = score_official_cli_collect(h)
+            summary["variants"][variant]["tasks"][task_name]["scores"] = sc
             print("[tracespatial] %s/%s" % (variant, task_name), flush=True)
             for k in ("metrics_2d", "start_in_mask", "end_in_bbox", "metrics_3d",
                       "start_success_rate", "end_success_rate",
                       "overall_success_rate", "no_collision_rate",
                       "collision_warnings", "skip_depthless"):
                 if sc.get(k) is not None:
-                    print("    %-22s %s" % (k, sc[k]))
-        summary["variants"][variant] = vinfo
+                    print("    %-22s %s" % (k, sc[k]), flush=True)
+        C.dump_json(summary_path, summary)
 
-    sp = os.path.join(args.out_dir, "summary.json")
-    C.dump_json(sp, summary)
-    print("\n[tracespatial] 汇总 -> %s" % sp)
+    print("\n[tracespatial] 汇总 -> %s" % summary_path)
     return 0
 
 

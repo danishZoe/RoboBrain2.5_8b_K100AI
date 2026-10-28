@@ -218,6 +218,111 @@ setsid nohup bash tools/clean_repro.sh > logs/clean_repro_stdout.log 2>&1 &
 setsid nohup bash tools/guard_cgroup.sh 85 > /dev/null 2>&1 &
 ```
 
+### 3.4 公开基准评测（精度优先，2026-10-27 新增）
+
+三个**公开上游评测集**（CV-Bench / RefSpatial-Bench / TraceSpatial-Bench）的
+协议冻结见 `reports/15_public_bench_protocol.md`，结果见
+`reports/16_public_bench_results.md`。
+
+```bash
+cd /root/private_data/workspace/robo
+
+# ① 依赖：open3d（TraceSpatial 3D 判分硬依赖）+ numpy 隔离前缀
+bash tools/install_official_deps.sh
+bash tools/prepare_core_prefix.sh     # 通用依赖 -> envs/pylibs_core（无 numpy2）
+bash tools/place_open3d.sh             # open3d + numpy2 -> envs/pylibs_o3d
+# ⚠️ open3d 0.19/0.20 的 ScalableTSDFVolume 在官方脚本那组参数下抽不出点，
+#    会让官方 3D 碰撞检查恒为空转（No-Collision 恒 1.0）。必须用 0.18.0：
+bash tools/install_o3d_018b.sh         # 解包 open3d 0.18.0 + numpy 1.26.4 -> envs/pylibs_o3d_v2
+bash tools/install_o3d_018c.sh         # 补 sklearn 桩件（open3d.ml 的 import 期依赖）
+export ROBO_O3D_PREFIX=$PWD/envs/pylibs_o3d_v2
+
+# ② 起服务（eager = 首次提交基线配置；graph = E1 采纳后的配置）
+bash tools/start_bench_service.sh eager 30000
+
+# ③ 数据完整性 manifest（SHA256 / 条目核对 / 全量解码检查）
+python3 submission/bench_public/manifest.py --out-dir outputs/bench_public/manifest
+
+# ④ 三个基准 + 稳定性检查 + 离线重判分
+bash tools/run_accuracy_first.sh        # RefSpatial(4变体×3split) + CV-Bench(2638)
+bash tools/finish_accuracy.sh           # 重判RefSpatial + TraceSpatial + 稳定性 + 重判分
+
+# ⑤ 候选配置复测（E1 非 eager）：唯一变量 = 去掉 --enforce-eager
+#    脚本内部会停掉 eager 服务 -> 起 graph 服务 -> 全量重跑三基准 -> 候选侧离线重判分 -> 对比
+bash tools/run_accuracy_candidate.sh
+#    串行衔接（基线跑完后自动接候选，避免两条链抢 CPU / 抢端口）：
+#    setsid nohup bash tools/chain_candidate.sh <finish_accuracy_pid> > logs/chain_candidate.log 2>&1 &
+
+# ⑥ TraceSpatial 官方判分（2D + 3D，4 个组合共用一个线程池；官方代码零改动）
+bash tools/run_ts_score_2d.sh           # 2D（不依赖 open3d）
+bash tools/run_ts_score_3d.sh 16 45     # 3D（并发 16，内存闸门 45GiB）
+python3 submission/bench_public/merge_ts_scores.py --bench-root outputs/bench_public
+python3 submission/bench_public/merge_ts_scores.py --bench-root outputs/bench_public_noneager
+
+# ⑦ 分片合并精确性验证（整集单进程官方跑 vs 分片合并，逐指标对拍）
+bash tools/verify_3d_merge.sh
+
+# ⑧ CV-Bench 图像输入协议因子实验（8 组，只跑 Count 子任务）
+bash tools/exp_cvbench_protocol_remaining.sh
+
+# ⑨ RefSpatial 噪声底（全量同配置重跑一次）
+bash tools/measure_refspatial_noise.sh
+
+# ⑩ 汇总表（验收要求 §8 的表格格式）
+python3 submission/bench_public/build_summary_table.py \
+  --bench-root outputs/bench_public --out outputs/bench_public/summary_table.md
+
+# ⑪ 精度回归对比表（参考=eager基线 / 候选=非eager）
+python3 submission/bench_public/compare_accuracy_runs.py \
+  --reference outputs/bench_public --candidate outputs/bench_public_noneager \
+  --out outputs/bench_public/accuracy_regression.md
+
+# ⑫ CV-Bench 上采样协议实验（up2/up4 × png/jpeg95 + 同会话 canonical 对照）
+bash tools/exp_cvbench_upscale.sh
+
+# ⑬ CV-Bench 提示词口径实验（数据集自带 prompt 字段 vs FlagEvalMM build_prompt）
+bash tools/exp_cvbench_prompt_style.sh
+
+# ⑭ Count 缺口归因（误差分布 + 失分样例导出，供人工目视核对）
+python3 tools/diag_cvbench_count.py
+python3 tools/diag_cvbench_count2.py
+python3 tools/diag_cvbench_protocol_detail.py
+python3 tools/diag_cvbench_imgsize.py
+python3 tools/export_count_samples.py
+
+# ⑮ 分片合并口径复核（改了 merge 逻辑后必须跑；差异不允许静默通过）
+python3 tools/remerge_ts_3d.py --bench-root outputs/bench_public
+```
+
+> ⚠️ **耗时提示（2026-10-28 修正）**：TraceSpatial 的 3D 官方几何判分是**单核**的。
+> 修复 open3d 之后实测**单样本 ~7~30 s**（16 路并发时），整集 100 条单进程 ≈ 12 分钟；
+> 用 `tools/run_ts_score_3d.sh`（16 并发 + cgroup 内存闸门）跑完
+> **4 个组合 × 100 题 = 400 个分片约 30 分钟**。
+> 早先"80 条合计 9 秒、剩 2 块跑几十分钟、单进程全量 80 分钟"的观测，
+> 是在 **open3d 失效**（TSDF 直接抛异常）的情况下测的，**已作废**。
+>
+> ⚠️ **官方判分代码零改动**：所有 TraceSpatial 数字都来自**未经修改**的
+> `third_party/upstream_eval/RoboTracer/Evaluation/summarize_acc.py`，
+> 我们只改变「喂给它的样本分组」与「并发调度」；
+> 分片合并是否等价于整集单进程，由 `tools/verify_3d_merge.sh` 逐指标对拍证明。
+
+**踩过的坑（都已修，见 §4）**：
+
+* `envs/pylibs` 里装 open3d 会连带装 **numpy 2.x**，遮蔽系统 numpy 1.25 →
+  torch 导入失败 → 必须拆前缀（`pylibs_core` 通用 / `pylibs_o3d` open3d）。
+* **open3d 0.19/0.20 的 `ScalableTSDFVolume` 改了体素语义**（新增
+  `volume_unit_resolution`/`depth_sampling_stride`），官方脚本给的
+  `voxel_length=0.02, sdf_trunc=0.08` 在新语义下 SDF 带比体素还窄 →
+  **TSDF 恒抽不出点** → 官方 3D 碰撞检查整体空转。必须用 **0.18.0**（见 §5.7）。
+* FlagEvalMM 的 `flagevalmm/evaluator/__init__.py` 会拖进 `accelerate`，而本机
+  `accelerate` 与 numpy 1.25 不兼容 → 官方 `tasks/cv_bench/evaluate.py` 直接
+  import 就炸。解法见 `submission/bench_public/official_flagevalmm.py`
+  （轻量 stub 包跳过框架重 `__init__`，**判分代码原文照用**）。
+* `nohup` 起服务挡不住**进程组 SIGTERM**，会话结束会把服务带走 → 必须用
+  `setsid`（`tools/start_bench_service.sh` 已改）。
+* 官方 stdout 的**行首冒号 / 阈值括注 / 单位后缀**会让朴素的字符串截断解析静默失败
+  （指标变成 `None` 再合并成全 0）→ 见 §5.8。
+
 ---
 
 ## 4. 故障排查表（均为本节点实测）
@@ -319,6 +424,179 @@ ls -l submission/bench/round1.jsonl submission/bench/round2.jsonl \
 
 ---
 
+## 5.7 官方 3D 判分的碰撞检查空转（2026-10-28 定位并修复）
+
+**症状**：官方 `summarize_acc.py` 对每条样本都打 `[Warn][3D] Collision check failed`，
+`ValueError: TSDF extracted no points`；结果是 `No-Collision Rate` **恒为 1.0**、
+`Overall Success` 偏乐观。
+
+**根因**：`open3d` **0.19 起改写了 `ScalableTSDFVolume` 的体素语义**，
+新增 `volume_unit_resolution`（默认 16）与 `depth_sampling_stride`（默认 4）。
+官方脚本给的 `voxel_length=0.02, sdf_trunc=0.08` 在新语义下
+**SDF 带（±0.08 m）比体素还窄**，没有任何体素能落进 SDF 带 →
+`extract_point_cloud()` 恒返回空集。
+
+**证据链**（全部实测，见 `reports/16_public_bench_results.md` §5.6）：
+
+| 实验 | 结果 |
+|---|---|
+| 合成平面（正前方 1 m）过 TSDF | 0 点（与数据无关） |
+| `volume_unit_resolution=64` 或 `sdf_trunc=1.28` | **2700 点** |
+| 读 0.20 的构造签名 | `(voxel_length, sdf_trunc, color_type, volume_unit_resolution=16, depth_sampling_stride=4)` |
+| 换 open3d 0.18.0（隔离前缀） | 合成平面 2700 点；真实样本 21036 点 / 13717 体素 |
+
+**修复**：
+
+```bash
+bash tools/install_o3d_018b.sh   # 解包 open3d 0.18.0 + numpy 1.26.4 -> envs/pylibs_o3d_v2
+bash tools/install_o3d_018c.sh   # 补 sklearn 桩件（open3d.ml 的 import 期依赖）
+export ROBO_O3D_PREFIX=$PWD/envs/pylibs_o3d_v2
+bash tools/verify_o3d018_tsdf.sh # 复验：官方那组参数能抽出点
+```
+
+> ⚠️ **官方 `summarize_acc.py` 一字未改**，只换环境（隔离前缀）+ 用
+> `ROBO_O3D_PREFIX` 切换判分子进程的 `PYTHONPATH`。
+> `envs/pylibs_o3d`（0.20）**保留作对照**，但不要用于 3D 判分。
+
+---
+
+## 5.8 官方 stdout 的指标抓取陷阱（2026-10-28 自查发现并修复）
+
+**症状**：判分跑完了、日志里也有指标行，但我们自己汇总出来的数值**全是 0**
+（`metrics` 全 0、三个 Success Rate 全 0）。如果没发现，会产出"看起来正常
+但全是 0"的错误报告。
+
+**根因**：官方打印有三种修饰，朴素的 `line[len(key):]` 截断 + `float()` 会静默失败：
+
+| 官方输出 | 朴素截断后 | 结果 |
+|---|---|---|
+| `2D Path Metrics (Normalized [0,1]): {...}` | `": {...}"` | `literal_eval` 失败 → `None` |
+| `Start Success Rate (<0.20m): 1.0000` | `"<0.20m): 1.0000"` | `float()` 失败 → `None` |
+| `Start Point Distance (mean): 0.0748 m` | `": 0.0748 m"` | `float()` 失败 → `None` |
+
+**修复**（`submission/bench_public/score_3d_chunked.py`）：
+
+* `_grab`：截断后 `lstrip(":")`；
+* `_grab_float`：取**最后一个冒号之后**的**首个数字**（同时覆盖阈值括注与单位后缀）。
+
+**回归防线**：`tools/verify_3d_merge.sh` —— 把「整集单进程官方跑」与
+「逐样本分片合并」的结果**逐指标对拍**。合并口径一旦再坏，对拍立刻报不一致。
+
+---
+
+## 5.9 分片合并口径与深景病态样本（2026-10-28 新增）
+
+### 5.9.1 官方对「无效样本」是**静默丢弃**的 → 合并分母必须按空 dict 规则还原
+
+官方 `calculate_metrics` 与 `compute_accuracy_2d/3d` 对以下样本**不打印任何标记**
+就丢掉：
+
+* 归一化后含 NaN、或图像尺寸无效的样本（2D 任务：`valid_pred_norm` 过滤）；
+* `dfd > 100` 的样本（3D 任务，单位是米）。
+
+唯一的可观测信号是：**有效样本数为 0 时官方打印空 dict `{}`**。
+逐样本分片时一个分片恰好一个样本，于是口径可以被**精确还原**：
+
+| 分片打印 | 官方含义 | 合并时的处理 |
+|---|---|---|
+| 非空 dict | 该样本进入指标计算且未被丢弃 | 计入分母，值即该样本值 |
+| **空 dict `{}`** | 该样本被官方丢弃 | **该分片对指标零贡献，分母不加** |
+| 全 0 的 dict | 有效样本被 `dfd>100` 全部丢弃 | 记为 `ambiguous`，不计入分母（审计计数） |
+
+⚠️ 若把「空 dict」分片也计入分母，2D 路径指标会偏 **3.0%**
+（实测 `dfd` 0.2055 → 0.1993，分母 97 被错记成 100）。
+`tools/remerge_ts_3d.py` 可用已落盘的 `per_chunk` 重算并逐指标对比，
+改动合并逻辑后**必须**跑一次，差异不允许静默通过。
+
+⚠️ **`--chunk-size > 1` 时路径指标不再精确**：多样本分片下"只丢了一部分样本"
+与"正常分片"在 stdout 上无法区分。因此**路径指标的权威口径始终是 `--chunk-size 1`**，
+多样本分片只能用于速率类指标的交叉验证。
+
+### 5.9.2 深景病态样本：单条判分 >45 分钟
+
+open3d 修复后 TSDF **真正生效**，代价是深景样本要在大点云上做 DBSCAN：
+
+* 100 条里 **4 条**（索引 56 / 78 / 82 / 98）单条判分 **>45 min**（16 并发下仍是），
+  其余 96 条 15~30 s；
+* 这 4 条在「整集单进程」下会被**串行化** → 墙钟不可接受；
+* 因此 `tools/verify_3d_merge.sh` 的对拍取**前 N 条干净样本**（默认 N=50），
+  阶段 A / 阶段 B 取**同一区间**逐指标对拍（合并代码对所有样本同路径）。
+
+### 5.9.3 `score_3d_chunked.py` 的 work-dir tag 冲突
+
+分片目录 tag 只取 `out_dir` 的 basename：
+
+```python
+tag = "%s_%s_%s" % (os.path.basename(os.path.normpath(j["out_dir"])), variant, task)
+```
+
+于是 `outputs/bench_public/tracespatial` 与 `outputs/bench_public_noneager/tracespatial`
+会落到**同一个 tag 目录**，而 `official` 变体的 `model_id` 也相同
+→ 同一个 `outputs/<model_id>_3D.jsonl` 被两次写入。
+
+* 队列是按 job 顺序推进的，**同一 chunk 索引不会并发写**，所以已完成的分片不会被污染；
+* 但**排查时必须知道**：`tmp/ts3d/tracespatial_official_3D/c0056/` 里的 jsonl
+  可能是**候选配置**的预测，不是基线的。
+* 新脚本一律**按 bench 根目录拆 work-dir**（`tmp/ts3d_verify_full` / `..._ne`）。
+
+---
+
+## 5.10 评测耗时分级：**先快后慢，慢的设上限**（2026-10-28 用户要求后固化）
+
+**规则**：评测一律按「预估墙钟」分级执行，**先跑快的拿到结论**，
+慢的评测必须**先设上限**（超时即停并记录为「已排除/未完成」），不允许无限期挂着。
+
+| 级别 | 预估墙钟 | 本任务实例 | 处置 |
+|---|---|---|---|
+| L1 快 | < 5 min | 指标抓取自检、协议解析核对、误差分布统计、合并口径重算 | 随时跑 |
+| L2 中 | 5~20 min | CV-Bench `Count` 子任务 788 题、TraceSpatial 3D 判分 96 条（16 并发，实测 941 s） | 主力档 |
+| L3 慢 | 20~60 min | CV-Bench 全量 2638 题、4× 上采样协议 | **设上限**，超时即停 |
+| L4 极慢 | > 60 min | 含深景大点云样本的官方 3D 判分（整集）、4× 上采样 | **不跑**或**排除病态样本后跑** |
+
+**本轮的实际教训（2026-10-28）**：
+
+* TraceSpatial 3D 生产判分在 **4 个深景病态样本**上卡了 **1.5 h**（已停止）；
+  改用「排除这 4 条 + 96 条兜底口径」后 **941 s 跑完 4 个组合** ✅；
+* `up4`（4× 上采样）单组 **>23 min** 未出结果（已停止），
+  `up2` 已经给出 +2.9~3.3 pt 的结论，**边际收益不值得再等**；
+* 判分器本身有单样本 O(病态) 的尾部，必须靠**排除**而不是**等待**；
+* 提并发**不等于**更快：`up2` 协议下并发 16 → 48，吞吐从 1.12 req/s 降到 0.9 req/s
+  （视觉负载变重后 prefill 侧已饱和）。**评测并发仍固定 16**。
+
+**耗时台账（自动生成，不手工记账）**：
+
+```bash
+python3 tools/build_eval_timing.py     # -> outputs/bench_public/eval_timing.{md,json}
+```
+
+| 产物 | 内容 |
+|---|---|
+| `outputs/bench_public/eval_timing.md` | 已完成评测的墙钟表 + 主动中止的沉没成本 + 分级规则 |
+| `outputs/bench_public/eval_timing.json` | 同上，机器可读 |
+| `tools/build_eval_timing.py` | 台账生成脚本（从日志与产物自动汇总） |
+| `tools/watch_up2_full.sh` | 慢评测看门狗：到硬上限自动止损并标记「未完成」 |
+| `tools/chain_cvbench_fast.sh` | 串行链：等前一个实验结束后自动接下一个 |
+
+> ⚠️ **统计陷阱（务必记住）**：`scores_3dchunk_*.json` 里有两个墙钟字段，
+> **`wall_s_total` 是各分片墙钟之和（并发累加，不是墙上时钟）**，
+> 并发 16 时约为真实墙钟的 4 倍；**`wall_s_all_jobs` 才是进程级真实墙钟**。
+> 台账一律用后者。
+
+**落地做法**：
+
+```bash
+# 慢评测一律先做「小样本可行性探针」，再决定是否放全量
+bash tools/probe_3d_fixed.sh                 # 3D 判分成本探针（先量单样本耗时）
+bash tools/run_ts_score_3d_96.sh            # 3D 判分（排除病态样本，941 s）
+# 超时即停的标准做法：按样本索引排除，并把索引写进产物字段
+python3 submission/bench_public/score_3d_chunked.py ... --exclude 56,78,82,98
+
+# 慢评测带硬上限（到点自动停 + 标记未完成）
+bash tools/launch_watch_up2.sh               # 上限 17:16:00
+```
+
+---
+
 ## 6. 产物清单
 
 | 路径 | 内容 |
@@ -359,6 +637,65 @@ ls -l submission/bench/round1.jsonl submission/bench/round2.jsonl \
 | `reports/14_new_instance_migration_plan.md` | **换镜像迁移方案：保留 vLLM 适配成果、一键重放、基线政策、风险与卡时估算** |
 | `samples/scnet_image_inventory.json` | 机器可读镜像清单（22 条 + sf_b075 关联项） |
 | `tools/bootstrap_vllm_adaptation.sh` | **新实例一键重放 vLLM 适配**（体检 / 装依赖 / 起服务 / 探针） |
+| `outputs/bench_public/manifest/` | **公开基准数据完整性 manifest**（逐文件 SHA256 / 条目核对 / 全量解码检查 / CV-Bench 图像落盘映射） |
+| `outputs/bench_public/refspatial/` | RefSpatial 逐题预测 + 官方 CLI 判分结果（4 变体 × 3 split） |
+| `outputs/bench_public/tracespatial/` | TraceSpatial 逐题预测 + 官方 2D/3D 几何指标 |
+| `outputs/bench_public/cvbench/` | CV-Bench 逐题预测 + 官方 FlagEvalMM 分组加权结果 |
+| `outputs/bench_public/stability/stability.json` | 每基准 12 样例 × 2 次重复推理的一致性检查 |
+| `outputs/bench_public/rescore_check.json` | **离线重新判分**的逐指标复现比对 |
+| `submission/bench_public/` | 公开基准评测代码（协议层 / 引擎 / 三个 runner / manifest / rescore / stability） |
+| `reports/15_public_bench_protocol.md` | 公开基准**协议冻结与差异表**（坐标口径两套官方实现的分歧与采用理由） |
+| `reports/16_public_bench_results.md` | 公开基准评测**结果**（明确标注非官方赛事评测集；含 CV-Bench 差距分解与图像协议因子实验） |
+| `reports/17_accuracy_regression.md` | **精度回归报告**（参考=eager 基线 / 候选=E1 非 eager，唯一变量=服务是否开图模式） |
+| `outputs/bench_public/cvbench_protocol/` | **CV-Bench 图像输入协议因子实验**（缩放策略 × 编码格式，8 组，只跑 Count 788 题） |
+| `outputs/bench_public/cvbench_upscale/` | **CV-Bench 上采样协议实验**（up2/up4 × png/jpeg95 + 同会话 canonical 对照，只跑 Count 788 题） |
+| `outputs/bench_public/cvbench_count_samples/` | **Count 失分样例的图像导出**（15 张 + manifest.json，供人工目视核对标注口径） |
+| `outputs/bench_public/verify_3d_merge.json` | **分片合并精确性对拍**结果（整集单进程 vs 逐样本分片，逐指标） |
+| `outputs/bench_public/summary_table.md` | 三个公开基准的**汇总表**（验收要求 §8 的表格格式） |
+| `outputs/bench_public/accuracy_regression.md` / `.json` | **精度回归对比**（参考=eager 基线 / 候选=E1 非 eager，含噪声底） |
+| `outputs/bench_public_noneager/` | 候选配置（非 eager）的同口径复测产物 |
+| `outputs/bench_public_noisecheck/` | **RefSpatial 噪声底**实测（全量同配置重跑一次） |
+| `submission/bench_public/score_3d_chunked.py` | TraceSpatial 官方判分的**分片并行调度器**（官方 `summarize_acc.py` 零改动） |
+| `submission/bench_public/merge_ts_scores.py` / `build_summary_table.py` / `compare_accuracy_runs.py` | 分片结果回填 / 汇总表 / 精度回归对比 |
+| `outputs/bench_public_3d96/` | **TraceSpatial 3D 兜底判分**（排除 4 个深景病态样本，96/100，4 组合，941 s） |
+| `outputs/bench_public_verify/` | 分片合并对拍的**阶段 A**（整集单进程）产物 |
+| `outputs/bench_public/verify_3d_merge.json` | **对拍结果**：48 项指标全部一致 ✅ |
+| `tools/run_ts_score_3d_96.sh` / `tools/verify_3d_merge.sh` / `tools/remerge_ts_3d.py` | 3D 兜底判分 / 合并精确性对拍 / 合并口径重算 |
+| `outputs/bench_public/cvbench/task_breakdown.json` | CV-Bench 按 task / 选项数 / source 的失分层级分解（`analyze_cvbench.py` 产出） |
+| `outputs/bench_public/accuracy_regression.{md,json}` | 基线 vs 候选的逐指标差值表 + 逐题输出变化率 |
+| `outputs/bench_public_noneager/` | **E1 候选（非 eager）**的全量预测与判分（与基线同协议同样本） |
+| `outputs/bench_public_noisecheck/` | **同配置重跑**的噪声底测量（判定 1 pt 级差值能否归因于配置） |
+| `tools/run_accuracy_pipeline.sh` | 精度流水线（基线收尾 + 候选复测 + 汇总，判分任务多路并发） |
+| `tools/exp_cvbench_image_protocol.sh` | CV-Bench 图像输入协议因子实验（8 组） |
+| `tools/exp_cvbench_protocol_remaining.sh` | 同上，但**跳过已完成**的协议组（可续跑） |
+| `tools/measure_refspatial_noise.sh` | RefSpatial 同配置重跑的噪声底测量（全量，三方对比） |
+| `tools/status_acc.sh` | 精度流水线状态速查（各阶段/各协议进度） |
+| `tools/fix_prefix_metadata.sh` | 隔离前缀里孤立 numpy 元数据的修复（accelerate/numpy 冲突） |
+| `tools/install_o3d_018b.sh` / `tools/install_o3d_018c.sh` | 装 **open3d 0.18.0 + numpy 1.26.4** 到 `envs/pylibs_o3d_v2` 并补 sklearn 桩件（修复 3D 碰撞检查空转） |
+| `tools/verify_o3d018_tsdf.sh` | 验证 0.18.0 下官方那组参数能抽出 TSDF 点（修复前为 0） |
+| `tools/diag_tsdf_param_scan.sh` | open3d 0.20 的 `ScalableTSDFVolume` 参数空间扫描（定位体素语义变化） |
+| `tools/diag_open3d_3d.sh` / `tools/diag_tsdf_synth.sh` / `tools/diag_rgbdtype.sh` | 3D 判分缺陷的逐步定位（深度图布局 / 合成平面对照 / RGBDImage 构造矩阵） |
+| `tools/probe_3d_fixed.sh` | 3D 判分定点探测（指定样本区间的耗时 + 峰值 RSS） |
+| `tools/fix_ts_terminal_states.sh` | 修正 TraceSpatial 预测记录的 `terminal_state` 记账（2D 2 元组被误判） |
+| `submission/bench_public/score_3d_chunked.py` | **官方判分的逐样本分片并行调度器**（官方代码零改动；含 cgroup 内存闸门与精确合并口径） |
+| `submission/bench_public/merge_ts_scores.py` | 把分片判分结果回填进 `tracespatial/summary.json` |
+| `tools/run_ts_score_2d.sh` / `tools/run_ts_score_3d.sh` | TraceSpatial 2D / 3D 官方判分（4 个组合共用一个线程池） |
+| `tools/verify_3d_merge.sh` | **分片合并精确性验证**（整集单进程官方跑 vs 分片合并，逐指标对拍） |
+| `outputs/bench_public/verify_3d_merge.json` | 上述对拍结果 |
+| `outputs/bench_public/cvbench_protocol/protocol_compare.json` | 8 种图像协议的 Count 准确率对比 |
+| `outputs/bench_public_noisecheck/noise_floor.json` | RefSpatial **全量**同配置重跑的噪声底（逐 split + 默认范围均值） |
+| `outputs/bench_public/eval_timing.md` / `.json` | **评测耗时台账**（自动生成：已完成墙钟 + 中止沉没成本 + L1~L4 分级） |
+| `outputs/bench_public/cvbench_paired_tests.json` | **CV-Bench Count 配对符号检验**（噪声基线 / up2 / 提示词口径三组对拍的逐题翻转与 p 值） |
+| `outputs/bench_public/cvbench_answer_format_audit.json` | **答案格式审计**（`(C) 1` vs 纯字母；官方判分器归一化口径 vs 严格字母口径） |
+| `outputs/bench_public/cvbench_up2_full/` | **全量 CV-Bench（up2 第二口径）** 的逐题预测与官方判分结果 |
+| `outputs/bench_public/cvbench_prompt/` | **提示词口径实验**（dataset 自带 prompt vs FlagEvalMM build_prompt，Count 788 题） |
+| `tools/build_eval_timing.py` | **耗时台账生成脚本**（从日志/产物自动汇总） |
+| `tools/paired_sign_test.py` / `tools/audit_prompt_format.py` | 配对符号检验 / 答案格式审计（可复算） |
+| `tools/watch_up2_full.sh` / `tools/launch_watch_up2.sh` | 慢评测**看门狗**（到硬上限自动止损并标记「未完成」） |
+| `tools/chain_cvbench_fast.sh` | 实验链（等前一个结束 → 自动接下一个，慢档自动换高并发） |
+| `envs/pylibs_core/` | 通用隔离依赖前缀（**不含 numpy**，保持系统 numpy 1.25 + torch 可用） |
+| `envs/pylibs_o3d/` | open3d 0.20.0 + numpy 2.2.6（**仅保留作对照**；它的 TSDF 失效，见 §5.7） |
+| `envs/pylibs_o3d_v2/` | **open3d 0.18.0 + numpy 1.26.4 + sklearn 桩件**（3D 判分实际使用的前缀） |
 
 ---
 

@@ -17,8 +17,8 @@ done
 echo "  pip 结束"
 
 echo
-echo "===== [2/5] 拆分隔离前缀（open3d + numpy2 -> envs/pylibs_o3d）====="
-bash tools/fix_prefix_layout.sh 2>&1 | tail -n 40
+echo "===== [2/5] 拆分隔离前缀（open3d + numpy2 -> envs/pylibs_core_o3d）====="
+bash tools/prepare_core_prefix.sh 2>&1 | tail -n 40
 
 echo
 echo "===== [3/5] 代码自检 ====="

@@ -159,48 +159,273 @@ def prompt_cv_bench_flag_eval_mm(question: str, choices: Sequence[str]) -> str:
     return q.replace("<image 1> ", "", 1)
 
 
+def prompt_cv_bench_dataset(prompt_field: str) -> str:
+    """CV-Bench **数据集自带**的 ``prompt`` 字段 + RoboBrain 适配器后缀。
+
+    数据集卡把该字段描述为 "Prompt with question and choices pre-formatted"，
+    实际内容形如::
+
+        How many organs are in the image? Select from the following choices.
+        (A) 3
+        (B) 2
+        (C) 1
+        (D) 0
+
+    与 ``prompt_cv_bench_flag_eval_mm`` 的差别有两处：
+    选项标记 ``(A)`` vs ``A.``；指令句 "Select from the following choices."
+    vs "Answer with the option's letter from the given choices directly."。
+
+    这是**与 FlagEvalMM 并列的另一条官方口径**（Cambrian-1 / CV-Bench 原始仓库
+    直接用该字段），作为 R2 提示词因子的对照项。
+
+    末尾同样补 ``<think></think><answer>``（RoboBrain 适配器逐字行为），
+    且按 FlagEvalMM 的等价做法去掉图像占位符（本口径下本就无占位符）。
+    """
+    q = (prompt_field or "").strip()
+    return q + "<think></think><answer>"
+
+
 # --------------------------------------------------------------------------- #
 # 自检：与已验收的 scripts/robo_infer.py 逐字比对
 # --------------------------------------------------------------------------- #
+def _robo_infer_prompt_from_source(task: str, placeholder: str = "TEST TEXT"):
+    """**不导入 robo_infer**，用 AST 直接读它的源码取提示词模板。
+
+    ``robo_infer.py`` 顶层 import 了 ``torch`` / ``transformers``，在部分
+    transformers 版本下会因 lazy-import 失败而整个模块不可导入；提示词模板本身
+    是纯字符串拼接，用 AST 取更稳，也不会因为环境差异而让自检失效。
+    """
+    import ast
+
+    path = os.path.join(_SCRIPTS, "robo_infer.py")
+    if not os.path.exists(path):
+        return None
+    with open(path, encoding="utf-8") as fh:
+        tree = ast.parse(fh.read())
+    fn = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "build_prompt":
+            fn = node
+            break
+    if fn is None:
+        return None
+    for node in fn.body:
+        if not isinstance(node, ast.If):
+            continue
+        test = node.test
+        if not (isinstance(test, ast.Compare) and isinstance(test.left, ast.Name)
+                and test.left.id == "task" and test.comparators
+                and isinstance(test.comparators[0], ast.Constant)):
+            continue
+        if test.comparators[0].value != task:
+            continue
+        body = [b for b in node.body if isinstance(b, ast.Return)]
+        if not body or not isinstance(body[0].value, ast.JoinedStr):
+            return None
+        parts = []
+        for v in body[0].value.values:
+            if isinstance(v, ast.Constant):
+                parts.append(v.value)
+            elif isinstance(v, ast.FormattedValue):
+                parts.append(placeholder)
+            else:
+                return None
+        return "".join(parts)
+    return None
+
+
 def selfcheck_prompt_parity() -> bool:
-    """与已验收的 scripts/robo_infer.py 逐字比对上游提示词。"""
-    try:
-        import robo_infer  # noqa: E402
-    except Exception as exc:                       # pragma: no cover
-        print("[selfcheck] 无法导入 robo_infer: %s" % exc)
-        return False
+    """与已验收的 scripts/robo_infer.py 逐字比对上游提示词。
+
+    优先用 AST 读源码（不依赖 transformers 导入）；失败时退回直接 import。
+    """
     ok = True
+    checked = 0
     for task in ("pointing", "trajectory", "grounding"):
         a = prompt_upstream("TEST TEXT", task)
-        b = robo_infer.build_prompt("TEST TEXT", task)
+        b = _robo_infer_prompt_from_source(task)
+        if b is None:
+            try:
+                import robo_infer  # noqa: E402
+                b = robo_infer.build_prompt("TEST TEXT", task)
+            except Exception as exc:
+                print("[selfcheck] %-11s 无法取到 robo_infer 基准（%s）" % (task, exc))
+                ok = False
+                continue
         same = a == b
         ok = ok and same
-        print("[selfcheck] %-11s upstream 提示词与 robo_infer 一致: %s" %
-              (task, same))
+        checked += 1
+        print("[selfcheck] %-11s upstream 提示词与 robo_infer 一致: %s" % (task, same))
         if not same:
             print("   ours:", a)
             print("   ref :", b)
+    if checked == 0:
+        return False
     return ok
+
+
+# --------------------------------------------------------------------------- #
+# 图像输入协议（CV-Bench 输入侧的因子实验）
+#
+# 两个因子：
+#   缩放策略：canonical(上游 qwen_vl_utils) / none(不缩放) / long1500 / maxpix501760
+#   编码格式：png(无损) / jpeg95(官方 FlagEvalMM ``encode_image``)
+#
+# 官方 FlagEvalMM 的 CV-Bench 路径 = **不缩放(或按模型配置缩到长边<=1500) + JPEG q95**：
+#   ``tasks/cv_bench/process.py`` 把 ``data["image"]`` 存成磁盘文件，
+#   ``flagevalmm/prompt/prompt_tools.py::encode_image`` 先按
+#   ``max_long_side`` / ``min_short_side`` 缩放，再 ``img.save(format="JPEG",
+#   quality=95)`` 编码后 base64 上送。
+#   FlagEvalMM 仓库里的 Qwen 系列 model_config 用的正是
+#   ``min_short_side=28, max_long_side=1500``；RoboBrain 的配置未公开，
+#   故 ``long1500`` 一并纳入对照。
+# --------------------------------------------------------------------------- #
+IMAGE_PROTOCOLS = (
+    "canonical_png", "canonical_jpeg95",
+    "raw_png", "raw_jpeg95",
+    "long1500_png", "long1500_jpeg95",
+    "maxpix501760_png", "maxpix501760_jpeg95",
+    # 上采样协议：模型原生 preprocessor 上限 16777216 px（shortest_edge=65536，
+    # 即 256x256 的小图只会得到 64 个视觉 token）。Count 子任务里大量小目标，
+    # 有可能因为视觉 token 太少而漏检。这里验证"上采样是否能让小目标可见"。
+    "up2_png", "up2_jpeg95",
+    "up4_png", "up4_jpeg95",
+)
+_CURRENT_IMAGE_PROTOCOL = "canonical_png"
+
+
+def set_image_protocol(name: str) -> str:
+    """设置当前进程的图像输入协议（单次评测内固定，不跨样本变化）。"""
+    global _CURRENT_IMAGE_PROTOCOL
+    if name not in IMAGE_PROTOCOLS:
+        raise ValueError("未知图像协议 %r，可选 %s" % (name, list(IMAGE_PROTOCOLS)))
+    _CURRENT_IMAGE_PROTOCOL = name
+    return name
+
+
+def get_image_protocol() -> str:
+    return _CURRENT_IMAGE_PROTOCOL
+
+
+def _to_jpeg95(img) -> bytes:
+    """复刻官方 ``encode_image`` 的 JPEG 编码（quality=95）。"""
+    import io
+    from PIL import Image
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=95)
+    return buf.getvalue()
+
+
+def _to_png(img) -> bytes:
+    import io
+    from PIL import Image
+    if img.mode != "RGB":
+        img = img.convert("RGB")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _resize_long_side(img, max_long: int):
+    """复刻官方 ``encode_image`` 的 max_long_side 缩放（PIL 默认重采样）。"""
+    import math
+    w, h = img.size
+    if w > max_long or h > max_long:
+        scale = max_long / max(w, h)
+        return img.resize((math.floor(w * scale), math.floor(h * scale)))
+    return img
+
+
+def _resize_max_pixels(img, max_pixels: int):
+    """按总像素上限等比缩放（transformers 基线 ``max_pixels=501760`` 的口径）。"""
+    import math
+    w, h = img.size
+    if w * h <= max_pixels:
+        return img
+    scale = math.sqrt((w * h) / max_pixels)
+    return img.resize((max(1, int(w / scale)), max(1, int(h / scale))))
+
+
+# 上采样协议的像素上限：3,000,000 px ≈ 2930 个视觉 token（patch16 + merge2 → 32x32）
+UP_CAP_PIXELS = 3_000_000
+
+
+def _resize_upscale(img, factor: float, cap_pixels: int = UP_CAP_PIXELS):
+    """等比上采样 ``factor`` 倍；总像素不超过 ``cap_pixels``，且**绝不缩小**原图。
+
+    上采样不增加信息量，但会改变 ViT 的 patch 网格密度：小目标在 256x256
+    （只有 64 个视觉 token）时可能被整块吞掉，放大后能占用到更多 token。
+    """
+    import math
+    from PIL import Image
+    w, h = img.size
+    px = w * h
+    f = float(factor)
+    if px * f * f > cap_pixels:
+        f = math.sqrt(cap_pixels / float(px))
+    if f <= 1.0 + 1e-6:
+        return img
+    return img.resize((max(1, int(round(w * f))), max(1, int(round(h * f)))),
+                      Image.LANCZOS)
+
+
+def _encode_bytes_protocol(data: bytes, protocol: str) -> str:
+    import base64
+    import io
+    from PIL import Image
+
+    if protocol == "canonical_png" or protocol == "canonical_jpeg95":
+        # 与已跑完的基线**逐字节一致**（不改这条路径）
+        from image_canonical import canonicalize_bytes
+        png = canonicalize_bytes(data)
+        if protocol == "canonical_png":
+            return "data:image/png;base64," + base64.b64encode(png).decode()
+        with Image.open(io.BytesIO(png)) as im:
+            jpg = _to_jpeg95(im.copy())
+        return "data:image/jpeg;base64," + base64.b64encode(jpg).decode()
+
+    resize, _, codec = protocol.partition("_")
+    with Image.open(io.BytesIO(data)) as im:
+        img = im.copy()
+    if resize == "raw":
+        pass
+    elif resize == "long1500":
+        img = _resize_long_side(img, 1500)
+    elif resize == "maxpix501760":
+        img = _resize_max_pixels(img, 501760)
+    elif resize == "up2":
+        img = _resize_upscale(img, 2.0)
+    elif resize == "up4":
+        img = _resize_upscale(img, 4.0)
+    else:
+        raise ValueError("未知缩放策略 %r" % resize)
+    if codec == "png":
+        blob = _to_png(img)
+        mime = "png"
+    elif codec == "jpeg95":
+        blob = _to_jpeg95(img)
+        mime = "jpeg"
+    else:
+        raise ValueError("未知编码 %r" % codec)
+    return "data:image/%s;base64,%s" % (mime, base64.b64encode(blob).decode())
 
 
 # --------------------------------------------------------------------------- #
 # 服务客户端
 # --------------------------------------------------------------------------- #
 def encode_image(path: str) -> str:
-    """按上游 qwen_vl_utils 预处理后转 data URL（与已验收基线同源）。
-
-    该预处理逐像素复现上游 ``process_vision_info``（实测 max|diff|=0），
-    因此"用原图尺寸把 0~1000 换算成像素"与上游 ``rel_to_abs`` 口径一致。
-    """
-    return canonicalize_to_data_url(path)
+    """按当前图像协议编码后转 data URL。"""
+    protocol = get_image_protocol()
+    if protocol.startswith("canonical_"):
+        return canonicalize_to_data_url(path)
+    return _encode_bytes_protocol(open(path, "rb").read(), protocol)
 
 
 def encode_image_bytes(data: bytes) -> str:
     """同 encode_image，但输入是原始图像字节（CV-Bench 的图像内嵌在 parquet）。"""
-    import base64
-    from image_canonical import canonicalize_bytes
-    png = canonicalize_bytes(data)
-    return "data:image/png;base64," + base64.b64encode(png).decode()
+    return _encode_bytes_protocol(data, get_image_protocol())
 
 
 def encode_image_ref(ref) -> str:
@@ -334,6 +559,17 @@ def parse_points_1000(text: str, task: str = "pointing") -> List[Tuple]:
     if task == "trajectory":
         pts = re.findall(r"(\d+),\s*(\d+),\s*([+-]?\d+\.?\d+)", text)
         return [(int(x), int(y), float(d)) for x, y, d in pts]
+    if task == "trajectory_2d":
+        # TraceSpatial 的 2D 任务有两种提示词，输出格式不同：
+        #   * official 变体（RoboTracer 2D 提示词）→ 2 元组 ``[(x, y), ...]``
+        #   * upstream 变体（RoboBrain trajectory 提示词）→ 3 元组 ``[(x, y, d), ...]``
+        # 官方判分脚本 ``text2pts_normalize`` 两种都能吃；我们这里同样两种都接受，
+        # 避免把合法的 2D 输出误判成 parse_failed。
+        pts = re.findall(r"(\d+),\s*(\d+),\s*([+-]?\d+\.?\d+)", text)
+        if pts:
+            return [(int(x), int(y), float(d)) for x, y, d in pts]
+        pts2 = re.findall(r"\(\s*(\d+)\s*,\s*(\d+)\s*\)", text)
+        return [(int(x), int(y)) for x, y in pts2]
     if task == "pointing":
         pts = re.findall(r"\(\s*(\d+)\s*,\s*(\d+)\s*\)", text)
         return [(int(x), int(y)) for x, y in pts]

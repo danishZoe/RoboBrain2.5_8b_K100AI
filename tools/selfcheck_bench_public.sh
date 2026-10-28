@@ -3,7 +3,7 @@
 set -o pipefail
 WS=/root/private_data/workspace/robo
 cd "$WS" || exit 1
-export PYTHONPATH="$WS/envs/pylibs:$WS/third_party/upstream_eval/FlagEvalMM:${PYTHONPATH:-}"
+export PYTHONPATH="$WS/envs/pylibs_core:$WS/third_party/upstream_eval/FlagEvalMM:${PYTHONPATH:-}"
 export PYTHONWARNINGS=ignore
 set +u
 source /opt/dtk/env.sh >/dev/null 2>&1

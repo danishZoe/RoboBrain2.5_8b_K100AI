@@ -29,7 +29,7 @@ RoboBrain2.5-8B-NV 是基于 **Qwen3-VL** 架构的具身多模态模型，约 8
 
 - 权重：超算互联网 AI 社区模型库（本任务分配路径见第 2 节）
 - 镜像：`jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`
-- 提交仓库：【待填：托管平台可访问链接】；本次交付代码 revision = `0658ed25dcf32eaa66422e1e5fbdce16682fcd11`（短 `0658ed2`，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`）
+- 提交仓库：【待填】
 
 参考文档：
 
@@ -371,6 +371,8 @@ bash smoke.sh
 
 ## 6. 精度测评
 
+### 6.1 赛事官方精度（一致率 ≥98% / 劣化 ≤2%）：`BLOCKED`
+
 **本项状态：`BLOCKED`。**
 
 `verify.py` 按官方基线文件 `baselines/BAAI__RoboBrain2.5-8B-NV.json` 写死的配置调用服务跑评测。
@@ -445,6 +447,244 @@ source env.sh && python verify.py       # 跑评测，结果写入 verify_result
 > 官方基线文件到位后，`verify.py` 会自动走「按冻结配置跑评测 → 与官方 GPU 基线对比 →
 > 劣化 ≤2% 判 PASS」的路径，无需改代码。
 
+### 6.2 公开上游基准评测（CV-Bench / RefSpatial-Bench / TraceSpatial-Bench）
+
+**这三个评测集都不是赛事官方验收数据集。** 本节给出的是**公开上游基准**上的
+测试有效性与任务质量证据，**不能替代 §6.1 的赛事官方 98% 一致率门槛**。
+
+> **本节所有数字的口径边界**（尤其 §6.2.3 的上采样口径）：
+> * **对外上报的数字只有主口径**（CV-Bench `canonical_png` = 88.12、
+>   RefSpatial、TraceSpatial），它们与官方实现逐字一致；
+> * 任何**在评测集上按分数挑出来**的口径（§6.2.3 上采样、§6.2.4 提示词），
+>   都只作**归因/诊断**用途，**不替代主口径、不与论文对照、不作验收依据**
+>   ——《精度测试验收要求》§4.2：「不得根据某题 mask 或分数选择缩放方法」；
+> * 任何**改动评测数据、标签、判分器、聚合规则**的动作本轮**一件都没做**
+>   （可逐项核验，见 `reports/16` §5.15.1）。
+
+评测方式：**一律调用各官方评测仓库自带的判分脚本，不改判分逻辑**：
+
+| 基准 | 数据量 | 官方判分入口 | 结论 |
+|---|---|---|---|
+| CV-Bench | 2638 | `FlagEvalMM/tasks/cv_bench/evaluate.py::get_result` | 见下表 |
+| RefSpatial-Bench | 277（Location 100 + Placement 100 + Unseen 77） | `RoboRefer/Evaluation/summarize_acc.py` | 见下表 |
+| TraceSpatial-Bench | 100 | `RoboTracer/Evaluation/summarize_acc.py` | 见下表 |
+
+<!-- PUBLIC_BENCH_TABLE -->
+
+复现命令：
+
+```bash
+cd /root/private_data/workspace/robo
+export PYTHONPATH="$PWD/envs/pylibs_core:$PWD/third_party/upstream_eval/FlagEvalMM:$PWD/scripts:${PYTHONPATH:-}"
+source /opt/dtk/env.sh          # 解决 libgalaxyhip.so.5
+
+bash tools/start_bench_service.sh eager 30000     # 首提基线配置
+python3 submission/bench_public/manifest.py --out-dir outputs/bench_public/manifest
+python3 submission/bench_public/run_refspatial.py  --url http://127.0.0.1:30000/v1/chat/completions \
+        --run-id baseline-eager-refspatial  --out-dir outputs/bench_public/refspatial
+python3 submission/bench_public/run_cv_bench.py    --url http://127.0.0.1:30000/v1/chat/completions \
+        --run-id baseline-eager-cvbench    --out-dir outputs/bench_public/cvbench
+python3 submission/bench_public/run_tracespatial.py --url http://127.0.0.1:30000/v1/chat/completions \
+        --run-id baseline-eager-tracespatial --out-dir outputs/bench_public/tracespatial
+python3 submission/bench_public/stability.py --url http://127.0.0.1:30000/v1/chat/completions \
+        --out-dir outputs/bench_public/stability --n 12
+python3 submission/bench_public/rescore.py  --bench-root outputs/bench_public   # 离线重判分
+python3 submission/bench_public/build_summary_table.py --bench-root outputs/bench_public \
+        --out outputs/bench_public/summary_table.md
+```
+
+> 📦 **本包自包含性**：上面 `submission/bench_public/*.py` **就在本包内**（`bench_public/` 目录）；
+> `tools/*.sh|py` 是工作区 `/root/private_data/workspace/robo/tools/` 下同名脚本的**镜像**，
+> 本包内 `tools/` 目录已包含全部被本文引用的脚本，可直接取用。
+> `envs/`、`third_party/`、`outputs/` 属于运行环境与产物，**不在本包内**，按 §6.2 的命令在
+> 工作区 `/root/private_data/workspace/robo` 下执行。
+
+> ⚠️ **官方 TraceSpatial 3D 判分的两个硬依赖（2026-10-28 实测）**：
+>
+> 1. **必须用 open3d 0.18.0**。0.19/0.20 改了 `ScalableTSDFVolume` 的体素语义，
+>    官方脚本给的 `voxel_length=0.02, sdf_trunc=0.08` 在新语义下 **TSDF 恒抽不出点**
+>    → 官方脚本抛 `ValueError: TSDF extracted no points` →
+>    碰撞检查被官方脚本自己捕获成 `collision_flag=False` →
+>    **`No-Collision Rate` 恒 1.0、`Overall Success` 偏乐观**。
+>    修复方式：隔离前缀 `envs/pylibs_o3d_v2`（open3d 0.18.0 + numpy 1.26.4 + sklearn 桩件），
+>    **官方 `summarize_acc.py` 一字未改**，用 `ROBO_O3D_PREFIX` 切换判分子进程的 `PYTHONPATH`。
+> 2. **官方判分是单核的**。修复后实测单样本 ~7~30 s（16 路并发时），
+>    整集 100 条单进程 ≈ 12 分钟。用 `tools/run_ts_score_3d.sh`
+>    （逐样本分片并行 + cgroup 内存闸门）跑完 4 个组合 × 100 题 ≈ 30 分钟；
+>    **分片合并与整集单进程是否等价，由 `tools/verify_3d_merge.sh` 逐指标对拍证明**。
+
+```bash
+# 3D 判分（含 open3d 前缀切换）
+export ROBO_O3D_PREFIX=$PWD/envs/pylibs_o3d_v2
+bash tools/run_ts_score_3d.sh 16 45
+python3 submission/bench_public/merge_ts_scores.py --bench-root outputs/bench_public
+bash tools/verify_3d_merge.sh
+```
+
+#### 6.2.1 官方 3D 判分的两个**会让报告出错**的陷阱（2026-10-28 实测）
+
+> 1. **必须用 open3d 0.18.0**（见上）。0.19/0.20 的 `ScalableTSDFVolume` 改了体素语义，
+>    官方给的 `voxel_length=0.02, sdf_trunc=0.08` 在新语义下 **TSDF 恒抽不出点** →
+>    碰撞检查恒 False → `No-Collision Rate` 恒 1.0、`Overall Success` **偏乐观**。
+> 2. **官方对「无效样本」是静默丢弃的**：归一化后含 NaN / 尺寸无效的样本、
+>    以及 `dfd > 100` 的样本都不打印任何标记就丢掉。唯一可观测信号是
+>    **有效样本数为 0 时打印空 dict `{}`**。逐样本分片时一个分片恰好一个样本，
+>    于是合并口径可精确还原为「**空 dict 的分片分母不加**」。
+>    实测 100 片里有 3 片是空 dict：分母应为 97，误记成 100 会让 2D `dfd`
+>    偏 **3.0%**（0.2055 → 0.1993）。
+>    防线：`tools/remerge_ts_3d.py`（用已落盘 `per_chunk` 重算并逐指标对比）。
+> 3. **深景病态样本**：样本 56 / 78 / 82 / 98 单条判分 **>55 min**
+>    （open3d 修复后 TSDF 真生效 → 大点云 DBSCAN）。16 路并发下整集仍需 ~45~60 min。
+>    对拍脚本因此取**前 50 条干净样本**，阶段 A / B 取同一区间。
+
+#### 6.2.2 CV-Bench `Count` 缺口：成因已定位（可证实）
+
+论文 Table 2 的 CV-Bench 94.58 与我们实测的 88.12 差 6.46 pt，
+**缺口 100% 落在 `Count` 子任务**（788 题 72.34%）。逐项排除后（判分链路 / 提示词复刻 /
+token 预算 / 抽图压缩 / thinking / 图像编码协议 8 组因子），我们对失分样例做了
+**误差分布 + 人工目视核对**（导出 15 张图逐张看，`outputs/bench_public/cvbench_count_samples/`）：
+
+| 误差（预测个数 − 真值个数） | −3 | −2 | −1 | **0** | +1 | +2 |
+|---|---|---|---|---|---|---|
+| 题数 | 6 | 37 | 111 | **570** | 56 | 5 |
+
+* **|误差| ≤ 2 占 98.9%**；抽取形态 769/788 纯字母、**0 例数字型输出**；
+  字母分布与真值几乎重合 → 模型在**真实地数**，不是格式错；
+* 目视核对把失分拆成两类：
+  * **真实感知漏检**（如"洗碗机"样例：GT=1 正确，模型答 0）；
+  * **实例标注口径不一致**（"吊灯"样例：肉眼只有 1 盏，ADE20K 标了 3 个实例；
+    "斑马"样例：肉眼 5 匹，COCO 只标 4 匹，模型答 5 在人类视角下是对的）。
+* **第二类无法用任何推理侧参数修复** —— 它取决于模型计数语义是否与标注约定对齐，
+  而论文 NV 权重的训练数据未公开。剩余杠杆在**权重/训练数据**，不在推理栈。
+
+#### 6.2.3 输入分辨率因子：**只作归因，不作提分**（非官方口径，单列）
+
+模型原生 `preprocessor_config.json` 为 `size = {longest_edge: 16777216, shortest_edge: 65536}`
+→ 256×256 的图只有 **64 个视觉 token**。把图**等比上采样**（LANCZOS，不缩小原图，
+总像素 ≤3,000,000）会加密 ViT 的 patch 网格，小目标能占到更多 token。
+只跑 `Count` 788 题、图像与判分口径不变，唯一变量 = 缩放策略：
+
+<!-- UPSCALE_TABLE -->
+
+结果（`Count` 788 题，同一会话，唯一变量 = 缩放策略；判分 = 官方 FlagEvalMM `get_result`）：
+
+| 缩放策略 | Acc(ADE20K) | Acc(COCO) | Acc_2D | Δ vs canonical |
+|---|---|---|---|---|
+| `canonical_png`（同会话对照） | 63.74 | 78.25 | 71.00 | — |
+| **`up2_png`** | **65.79** | **82.06** | **73.93** | **+2.93** |
+| **`up2_jpeg95`** | **65.79** | **82.74** | **74.27** | **+3.27** |
+
+* `canonical_png` 对照复现出与另一次实验**完全一致**的 63.74 / 78.25
+  → 本轮对 `common.py` 的改动是纯增量的、没动基线路径，且 CV-Bench 可复现。
+* **机制**：模型原生 `preprocessor_config.json` 的 `shortest_edge=65536`
+  → 256×256 的图只有 **64 个视觉 token**；2× 上采样（LANCZOS、不缩小原图、
+  总像素 ≤3,000,000）加密 ViT 的 patch 网格，让小目标占到更多 token，
+  与"洗碗机漏检"这类失分（见 §6.2.2）机制一致。
+* **显著性**：逐题配对符号检验，错→对 61 / 对→错 18，**p = 1.27e-06**；
+  同配置两次运行的噪声底只有 0.29 pt（p=0.6875，不显著）⇒ 增益是真的。
+
+⚠️⚠️ **合规性声明（本节数字的正确用法，必读）**
+
+1. **上采样不是官方协议**：上游 `RoboBrain2.5/inference.py` 走
+   `qwen_vl_utils.process_vision_info`（只把长宽取 28 的倍数，**不放大**），
+   官方 `FlagEvalMM encode_image` 也只按 `max_long_side` **缩小**、按 `min_short_side` **补白边**。
+2. **它没有篡改 benchmark**：题目、GT 标注（SHA256 逐字相同）、官方判分器
+   （`get_result` 零 patch）、官方聚合公式、提示词、坐标与阈值**全部未改**；
+   唯一变动是**送进模型的图像编码**，而这本来就属于推理栈，
+   且放大后仍在模型声明的 `longest_edge=16,777,216` 能力范围内。
+3. **但它是「在评测集上按分数挑出来的协议」**：《精度测试验收要求》§4.2
+   明确写「**不得根据某题 mask 或分数选择缩放方法**」。
+   ⇒ 因此 **本口径的数值带选择偏差，不是无偏的准确率估计**：
+   * **不得**替代主口径（`canonical_png` = **88.12**）作为上报数字；
+   * **不得**与论文的 94.58 并列比较或作为"更接近论文"的证据；
+   * **不得**作为精度结论或赛事官方 98% 一致率门槛的证据
+     （官方参考输出是用官方图像处理产生的，改分辨率会直接掉一致率）。
+4. **它的合法用途只有一个：归因**。这组实验把「提示词 / 图像编码格式 / 解码参数」
+   三个因子全部排除，**定位到「输入分辨率 → 视觉 token 密度」是 `Count` 缺口的机制**，
+   从而说明剩余缺口（真实小目标漏检 + 实例标注口径不一致）**在推理栈上已无可动之处**，
+   必须回到权重/训练数据解决。
+5. **要做成合规的精度提升，正确路径是**：在**独立验证集**上选协议 →
+   在**留出集**上验证 → 冻结协议后再跑测试集。
+   本轮**没有留出集**，所以这件事**未完成**，如实标注。
+6. **主口径 `canonical_png` 本身不是挑出来的**（这是最该被追问的一点，
+   §5.5 的 8 组协议矩阵给出硬证据）：`raw_jpeg95` 71.67、`long1500_jpeg95` 71.62
+   都比主口径 `canonical_png` 71.00 **高 0.6~0.7 pt**。
+   主口径是**先验按「与上游 `qwen_vl_utils` 逐字一致」**选定的，
+   不是按分数选的，而且选中的是 8 组里**偏保守**的一个
+   ⇒ **对外上报的 88.12 不含协议选择偏差。**
+
+**（全量诊断结果）**。为回答「输入分辨率这个因子在全量上能拿回多少」，
+又跑了一次**全量 2638 题**（`up2_png`、并发 48、**2837.5 s / 47.3 min**，在 59 min 硬上限内完成，
+2638/2638 终态 `ok`）：
+
+| 指标 | 主口径 `canonical_png` | `up2_png`（诊断口径） | Δ |
+|---|---|---|---|
+| Acc(ADE20K) | 77.88 | 78.99 | **+1.11** |
+| Acc(COCO) | 85.96 | 88.45 | **+2.49** |
+| Acc_2D | 81.92 | 83.72 | **+1.80** |
+| Acc(Omni3D 3D) | 94.33 | 93.83 | **−0.50** |
+| **CV_score（官方综合分）** | **88.12** | **88.78** | **+0.66** |
+
+* 2D 分支 +1.80 pt（含 `Relation`，把 `Count` 的 +2.9~3.3 pt 摊薄）；
+  **3D 分支反而 −0.50 pt**（上采样对 3D 空间感知无益）；
+* 官方综合分净 **+0.66 pt**，只有「与论文 94.58 的差距（6.46 pt）」的**约 1/10**
+  ⇒ **6.46 pt 缺口不可能由输入分辨率解释**，必须回到权重/训练数据一侧解决。
+* 该表同样按 §6.2.3 的口径声明处理：**诊断口径，不替代主口径 88.12**。
+
+```bash
+# 第二口径复现（只跑 Count 子任务；输出仅用于归因，不用于上报）
+bash tools/exp_cvbench_upscale.sh
+# 配对显著性检验 + 答案格式审计
+python3 tools/paired_sign_test.py
+python3 tools/audit_prompt_format.py
+```
+
+#### 6.2.4 提示词口径、运行间噪声底与评测耗时分级
+
+**（1）提示词口径**。CV-Bench 数据集自带 `prompt` 字段（选项写成 `(A) 3`、
+结尾 "Select from the following choices."），与 FlagEvalMM 构造的
+（`A. 3` + "Answer with the option's letter from the given choices directly."）**逐字不同**。
+两条官方口径都跑过（`Count` 788 题，图像协议固定 `canonical_png`）：
+
+| 提示词口径 | Acc(ADE20K) | Acc(COCO) | Acc_2D |
+|---|---|---|---|
+| **`flagevalmm`（主口径，与官方逐字一致）** | **64.33** | 78.25 | **71.29** |
+| `dataset`（数据集自带 prompt） | 61.70 | 78.25 | 69.97 |
+
+**答案格式审计**（排除"抽取伪影"可能）：`dataset` 口径下模型 767/788 输出 `(C) 1` 形式，
+官方判分器对这种格式**比严格字母归一化更宽松**（多认 8 题），
+但即便如此 `dataset` 口径在 ADE20K 上**仍差 2.63 pt**（按严格归一化口径差 4.97 pt），
+远超噪声底 ⇒ **「dataset 口径更差」是真的**。
+⚠️ 反面提醒：自建抽取器若不做格式归一化，在该口径下会得到 **0/788 全错**的假象。
+
+**（2）运行间噪声底与配对显著性检验**。逐字**同配置**两次运行（788 题）：
+原始输出 10/788（1.27%）不同、判分层面 6/788 翻转、官方 `acc_2d` 差 **0.29 pt**
+（符号检验 p=0.6875，不显著）⇒ **噪声底 ≈ 0.3 pt**。
+据此，本报告里 `Count` **小于 ~0.6 pt 的分差一律视为噪声**；
+上采样 +2.93/+3.27 pt 的 p 值为 1.3e-06 / 4.7e-07，**远在噪声之上**。
+
+**（3）评测耗时分级与台账**（用户要求"优先做快的评测、不要老卡在慢评测上"）：
+
+| 档位 | 预估墙钟 | 处置 | 本轮实例 |
+|---|---|---|---|
+| L1 | < 5 min | 随时跑 | RefSpatial/TraceSpatial 推理、误差分布统计、合并口径重算 |
+| L2 | 5~20 min | 主力档 | CV-Bench `Count` 788 题各组、TraceSpatial 3D 兜底判分（941 s） |
+| L3 | 20~60 min | **设硬上限** | CV-Bench 全量 2638 题、8 组协议矩阵 |
+| L4 | > 60 min | **不跑**或先排除病态样本 | 3D 整集判分（含深景病态样本）、`up4` 上采样 |
+
+* 3D 整集判分卡住 > 1 h → **主动停止**，改用「排除 56/78/82/98 + 96 条兜底口径」，
+  **941 s** 跑完 4 个组合；
+* `up4` 单组 > 23 min 无结果 → **主动停止**；
+* 全量 `up2`（L3）→ 并发 16→48，并设 **59 min 硬上限**（`tools/watch_up2_full.sh` 到点自动止损）。
+* 台账由脚本自动生成：`outputs/bench_public/eval_timing.md` / `.json`
+  （`tools/build_eval_timing.py`）。
+  ⚠️ 统计陷阱：`scores_3dchunk_*.json` 的 `wall_s_total` 是**各分片墙钟之和**（并发累加，
+  并发 16 时约为真实墙钟的 4 倍），**必须用 `wall_s_all_jobs`**。
+
+```bash
+python3 tools/build_eval_timing.py     # 重新生成耗时台账
+```
+
 ## 7. 性能参考
 
 性能测试脚本 `bench.sh` 使用 SGLang 自带压测客户端（对 vLLM 服务通用），
@@ -508,7 +748,7 @@ python -m sglang.bench_serving \
 | 4096 | 1024 | 64 | 128 | 651.67 | 0.20 | 201.13 | 1450.34 | 71638.63 | 322252.82 | 219.93 | 462.72 | 296628.01 |
 | 16384 | 1024 | 1 | 8 | 375.90 | 0.02 | 21.79 | 432.26 | 3648.41 | 3701.71 | 42.36 | 42.76 | 46986.40 |
 | 16384 | 1024 | 8 | 16 | 256.60 | 0.06 | 63.85 | 1267.53 | 13901.87 | 29278.75 | 111.49 | 119.08 | 127953.45 |
-| 16384 | 1024 | 64 | 128 | 7694.30 | 0.02 | 17.03 | 337.93 | 2309809.63 | 3478357.63 | 797.18 | 1000.47 | 3125328.93 |
+| 16384 | 1024 | 64 | - | - | - | - | - | - | - | - | - | - |
 <!-- BENCH_SUMMARY:END -->
 
 > **读表要点（单卡口径）**

@@ -123,7 +123,7 @@ def iter_cvbench() -> Iterator[Tuple[Dict[str, Any], bytes]]:
 
     cols = ["idx", "type", "task", "question", "choices", "answer", "source",
             "source_dataset", "source_filename", "target_class", "target_size",
-            "bbox", "filename", "image"]
+            "bbox", "filename", "image", "prompt"]
     for name in ("test_2d.parquet", "test_3d.parquet"):
         path = os.path.join(CVBENCH_DIR, name)
         pf = pq.ParquetFile(path)
@@ -147,6 +147,10 @@ def iter_cvbench() -> Iterator[Tuple[Dict[str, Any], bytes]]:
                     "bbox": row.get("bbox"),
                     "filename": row["filename"],
                     "parquet_file": name,
+                    # 数据集自带的 prompt（"question and choices pre-formatted"）：
+                    #   "<question> Select from the following choices.\n(A) ...\n(B) ..."
+                    # 与 FlagEvalMM 的 build_prompt 逐字不同，作为对照口径保留。
+                    "prompt_official": row.get("prompt"),
                 }
                 img = row.get("image") or {}
                 yield ann, img.get("bytes") or b""
