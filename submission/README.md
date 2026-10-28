@@ -29,7 +29,7 @@ RoboBrain2.5-8B-NV 是基于 **Qwen3-VL** 架构的具身多模态模型，约 8
 
 - 权重：超算互联网 AI 社区模型库（本任务分配路径见第 2 节）
 - 镜像：`jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`
-- 提交仓库：代码仓库 `https://github.com/danishZoe/RoboBrain2.5_8b_K100AI`；托管平台可访问链接【待填】；本次交付代码 revision = `f67f316fd900a10a4c5e6db2891b1232771377a2`（短 `f67f316`，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`）
+- 提交仓库：代码仓库 `https://github.com/danishZoe/RoboBrain2.5_8b_K100AI`；托管平台可访问链接【待填】；本次交付代码 revision = `e5d3d1e7bd02a66ab809b4d9fc2f514b5730048a`（短 `e5d3d1e`，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`）
 
 参考文档：
 
