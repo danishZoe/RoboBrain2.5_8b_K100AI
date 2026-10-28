@@ -415,13 +415,23 @@ def build_public_block(root: str) -> str:
     return "\n".join(body)
 
 
-def replace_block(text: str, begin: str, end: str, legacy: str, body: str) -> str:
+def replace_block(text: str, begin: str, end: str, legacy: str, body: str):
+    """把标记块替换成新内容。返回 (新文本, 状态)。
+
+    状态取值：replaced / unchanged / missing —— 区分「没找到标记」与
+    「找到了但内容与上次一致」，后者不是错误。
+    """
     if begin in text and end in text:
         pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
-        return pat.sub(lambda _m: begin + "\n\n" + body + "\n\n" + end, text, count=1)
+        m = pat.search(text)
+        new_block = begin + "\n\n" + body + "\n\n" + end
+        if m and m.group(0) == new_block:
+            return text, "unchanged"
+        return pat.sub(lambda _m: new_block, text, count=1), "replaced"
     if legacy in text:
-        return text.replace(legacy, begin + "\n\n" + body + "\n\n" + end, 1)
-    return text
+        return text.replace(
+            legacy, begin + "\n\n" + body + "\n\n" + end, 1), "replaced"
+    return text, "missing"
 
 
 def main() -> int:
@@ -448,10 +458,11 @@ def main() -> int:
             print("[accuracy] skip %s (no source data)" % key)
             continue
         begin, end, legacy = BLOCKS[key]
-        before = t
-        t = replace_block(t, begin, end, legacy, body)
-        if t == before:
+        t, status = replace_block(t, begin, end, legacy, body)
+        if status == "missing":
             print("[accuracy] WARN: marker not found for %s (%s)" % (key, legacy))
+        elif status == "unchanged":
+            print("[accuracy] %s unchanged (内容与上次生成一致)" % key)
         else:
             print("[accuracy] %s injected (%d chars)" % (key, len(body)))
 
