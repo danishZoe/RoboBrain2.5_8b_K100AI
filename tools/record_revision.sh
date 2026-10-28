@@ -27,15 +27,41 @@ DELIVERABLES="submission scripts tools configs samples patches reports platform"
 FINALIZE=0
 [ "${1:-}" = "--finalize" ] && FINALIZE=1
 
+# .gitignore 的**唯一真源**在本脚本里：每次运行都写入完整版本。
+# 早期版本只写最小集（envs/pylibs、cache、tmp、outputs、logs），
+# 会把仓库里已有的「大体积 benchmark 镜像 / 密钥」排除规则整段覆盖掉，
+# 导致 third_party/ 下的镜像库和 .env/*.token 有被误提交的风险。
+# 因此这里写**全集**，任何一方都不得单独裁剪。
 cat > "$W/.gitignore" <<'EOF'
 # 隔离依赖与运行产物：不进交付仓库（体积大、可由脚本重新生成）
-envs/pylibs/
+envs/
+envs/*
 cache/
 tmp/
 outputs/
 logs/
 *.pyc
 __pycache__/
+
+# 大体积 benchmark / 数据镜像：只保留清单与代码，数据另行拉取
+third_party/benchmarks/
+third_party/upstream_eval/
+third_party/Robo-Dopamine/
+third_party/RoboBrain2.5-upstream-HEAD/
+third_party/RoboBrain2.5/
+
+# 生成的快照与压缩包
+*.tar.gz
+*.tgz
+*.bak_*
+*.bak-*
+submission/__pycache__/
+submission/logs/
+
+# 密钥与平台本地状态
+.env
+*.token
+*.key
 EOF
 
 if [ ! -d "$GITDIR" ]; then
