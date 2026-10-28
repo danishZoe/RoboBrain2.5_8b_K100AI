@@ -1,7 +1,7 @@
 # RoboBrain2.5-8B-NV / K100AI (K500SM_AI) 交付 revision
-revision      = e5d3d1e7bd02a66ab809b4d9fc2f514b5730048a
-revision_short= e5d3d1e
-recorded_at   = 2026-10-28T20:52:00+08:00
+revision      = 4cded9f3faf1d7cfe7ab29b0aff602620c4babc2
+revision_short= 4cded9f
+recorded_at   = 2026-10-28T20:54:32+08:00
 tracked_files = 488
 manifest      = submission/MANIFEST.sha256
 repo_layout   = submission scripts tools configs samples patches reports platform
@@ -9,5 +9,5 @@ note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs�
                  （隔离依赖与运行产物，可由提交包脚本重新生成）。
                  托管平台链接与 revision 仍需由用户上传后回填
                  （PDF 要求代码与镜像分别提交到指定托管平台）。
-revision_note_commit= e116060bbd45dc8a4a9f0aff85ed755d49e500fb
-revision_note_short = e116060
+revision_note_commit= dcbe721877b7eeedaf6443df99f7c8a8ca2daa11
+revision_note_short = dcbe721
