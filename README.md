@@ -23,7 +23,10 @@
 | 4 | `reports/11_tuning_experiments.md` | 服务级单变量调优实验 E1–E4（判定标准实验前登记） |
 | 5 | `reports/08_gap_vs_official_baseline.md` | 与官方基线逐项差距 + 10 条口径风险 |
 | 6 | `reports/09_vllm_adaptation.md` | vLLM 适配全过程（4 个阻塞 + grounding 根因闭环） |
-| 7 | `reports/00_RUNBOOK.md` | 运行手册与 15 条实测故障排查 |
+| 7 | `reports/16_public_bench_results.md` | 公开基准全套（CV-Bench/RefSpatial/TraceSpatial）：协议冻结、88.12/63.00、噪声底、缺口归因 |
+| 8 | `reports/20_extended_bench_results.md` | **扩展 7 基准**（CrossPoint/EmbSpatial/RoboSpatial/Q-Spatial/MSMU/ShareRobot/VABench）：协议披露、bug 修复复盘、深度/模板诊断 |
+| 9 | `reports/21_a800_extbench_crossval.md` | **A800 交叉验证**（Q-Spatial/RoboSpatial）：K100 推理保真度旁证 |
+| 10 | `reports/00_RUNBOOK.md` | 运行手册与 15 条实测故障排查 |
 
 ## 2. 报告全集
 
@@ -42,6 +45,14 @@
 | `10_phase5_bench.md` | 阶段 5：冒烟与六档压测（含 §3.7 计量口径服务端核算、§3.8 随机 vs 自然提示词对照实验） |
 | `10a_server_counter_crosscheck.md` | 服务端引擎计数器逐档交叉核对表（输出 token 计量口径的独立证据） |
 | `11_tuning_experiments.md` | 服务级调优实验 E1–E4（判定标准实验前登记） |
+| `12_official_asset_provenance.md` | 官方资产来源核查（模型/数据/评测器版本谱系） |
+| `15_public_bench_protocol.md` | 公开基准协议冻结与差异表（prompt/坐标契约逐项登记） |
+| `16_public_bench_results.md` | 公开基准结果：三基准全量 + 稳定性/噪声底/重判分复现 |
+| `17_accuracy_regression.md` | 精度回归（基线 eager vs 候选 graph） |
+| `18_cv_backend_probe.md` | CV 后端探针（计数器交叉核对） |
+| `19_a800_cross_validation.md` | A800↔DCU CV-Bench 全量对照（Δ0.1pt，一致率 99.6%） |
+| `20_extended_bench_results.md` | **扩展 7 基准结果**（论文 Table 2/3 补齐 + TraceSpatial 病态样本根因勘误） |
+| `21_a800_extbench_crossval.md` | **A800 交叉验证**：Q-Spatial/RoboSpatial 跨硬件对照 |
 | `bench_summary_custom.md` | 自有压测客户端结果 + 与官方客户端交叉验证 |
 
 ## 3. 目录
@@ -56,6 +67,26 @@
 | `configs/`、`patches/`、`envs/`、`samples/`、`logs/`、`annotated/` | 配置、patch、垫片、样例、日志、目视校验图 |
 
 ## 5. 远端常用命令
+
+### 4.1 扩展公开基准总表（2026-10-29，非 eager 服务 / 单卡 / BF16 / greedy）
+
+> 明细与协议披露见 `reports/20`；A800 旁证见 `reports/21`；原始三基准见 `reports/16`。
+> 论文分仅作同量级对照（协议未公开）。
+
+| 基准 | K100 (DCU) | A800 (NVIDIA) | 论文 NV | 判分 |
+| --- | --- | --- | --- | --- |
+| CV-Bench | 88.12 | 88.00/88.04 | 94.58 | 官方 FlagEvalMM 零改动 |
+| RefSpatial（默认范围均值） | 63.00 | — | 60.50 | 官方 RoboRefer CLI |
+| CrossPoint | 75.20 | — | 75.40 | 官方 calc_score，`relative_1000` 零改动 |
+| EmbSpatial | 77.77 | — | 75.58 | 自建 MC（官方无代码，已披露） |
+| RoboSpatial | 62.0 | 62.86 | 73.03 | 官方 eval 零改动（compat 偏低已归因：深度输入口径） |
+| Q-Spatial | 60.4% | 69.3% | 73.53 | 官方公式复刻（跨硬件差为边界翻转，见 21） |
+| MSMU | 定量 47.0~76.4%（δ1.25~1.95）/ 定性 63.8% | — | 64.17 | 官方 judge_prompt（judge=本服务） |
+| TraceSpatial 3D（最大可行覆盖） | Start 78.6~80.6 / End 63.3~66.3 / Succ 46.9~49.0 | — | 83/63/44 | 官方判分（4 条样本官方代码不终止，根因见 20 §6） |
+| ShareRobot-T | DFD 0.181 | — | 0.1164 | FlagEvalMM PR#84 零改动 |
+| ShareRobot-A | mIoU 0.019（参考系错配，不可靠） | — | — | 同上 |
+| VABench-V | DFD 0.413 | — | 0.1281 | PR84 同款几何指标（官方未发布，披露替代） |
+| Robo-Dopamine | **NOT_RUN**（可选扩展） | — | — | 需独立 GRM 模型 |
 
 ```bash
 ssh dcu_1026
