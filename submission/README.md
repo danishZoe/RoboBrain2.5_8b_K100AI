@@ -473,7 +473,7 @@ source env.sh && python verify.py       # 跑评测，结果写入 verify_result
 | CrossPoint-Bench | 1000 | **75.20** | — | 75.40 | 官方 `calc_score.py` + `relative_1000` 零改动 |
 | EmbSpatial-Bench | 3640 | **77.77** | — | 75.58 | ⚠️ 自建 MC（官方未发布代码，已披露） |
 | RoboSpatial-Home | 350 | **62.0** | 62.86 | 73.03 | 官方 `eval_pregenerated_results` 零改动 |
-| Q-Spatial-Bench | 101 | **60.4%** | 69.3% | 73.53 | 官方公式复刻 + 披露兜底抽取 |
+| Q-Spatial-Bench | 101 | **60.4%** | 69.3%（默认参数）/ 65.4%（对齐 K100 参数，§6.2.6） | 73.53 | 官方公式复刻 + 披露兜底抽取 |
 | MSMU-Bench | 987 | 定量 47.0~76.4%（δ1.25~1.95）/ 定性 63.8% | — | 64.17 | 官方 `judge_prompt`（judge=本服务，greedy） |
 | TraceSpatial 3D（最大可行覆盖） | 98/99 | Start 78.6~80.6 / End 63.3~66.3 / Succ 46.9~49.0 | — | 83 / 63 / 44 | 官方判分（4 条样本官方代码不终止，§6.2.5） |
 | ShareRobot-T | 200 | DFD **0.181** | — | 0.1164 | FlagEvalMM **PR#84** 零改动 |
@@ -872,11 +872,12 @@ python3 tools/build_eval_timing.py     # 重新生成耗时台账
 
 **跨硬件对照（`reports/21`）**：RoboSpatial A800 62.86 vs K100 62.0（Δ0.86pt，
 同一保守偏置）——缺口在 bench 配置侧（官方 harness 提供深度输入；喂深度后
-compat 41.0→54.3%）。Q-Spatial A800 69.3% vs K100 60.4%（+8.9pt）：逐题配对
-分析显示净差几乎全来自 ratio≈2 判定边界翻转（19/101 题在线界附近），属长链
-数值估计对 bf16 微分歧与版本差的高敏感性，**非系统性算子错误**；A800 距论文
-仍差 4.2pt，缺口主因仍是提示引导/模型估计质量（官方模板间变体实验：裸题 38.6%
-vs steps 模板 60.4%）。
+compat 41.0→54.3%）。Q-Spatial A800 69.3% vs K100 60.4%（+8.9pt）：**服务参数对齐
+实验（`reports/21` §3.1）已将其分解**——A800 首次跑未对齐 K100 的 serving 参数
+（batched-tokens 4096 / max-seqs 64 / 关前缀缓存），对齐后 A800 自身回落到 65.35%：
+约 4pt 属参数不对齐，剩余 ~5pt 为构建/版本数值差异与单次运行噪声（长链数值估计的
+高敏感性，非系统性算子错误）；A800 距论文仍差 8.2pt，缺口主因仍是提示引导/模型
+估计质量（官方模板间变体实验：裸题 38.6% vs steps 模板 60.4%）。
 
 **偏差归因一览**（全部非算子侧；算子保真另有 CV-Bench A800↔DCU 99.6% 逐题
 一致旁证，`reports/19_a800_cross_validation.md`）：
