@@ -455,7 +455,8 @@ source env.sh && python verify.py       # 跑评测，结果写入 verify_result
 
 > **本节所有数字的口径边界**（尤其 §6.2.3 的上采样口径）：
 > * **对外上报的数字只有主口径**（CV-Bench `canonical_png` = 88.12、
->   RefSpatial、TraceSpatial），它们与官方实现逐字一致；
+>   RefSpatial、TraceSpatial，及 §6.3 扩展基准的各主口径），它们与官方实现
+>   逐字一致（或属 §6.3 表内已披露的替代口径）；
 > * 任何**在评测集上按分数挑出来**的口径（§6.2.3 上采样、§6.2.4 提示词），
 >   都只作**归因/诊断**用途，**不替代主口径、不与论文对照、不作验收依据**
 >   ——《精度测试验收要求》§4.2：「不得根据某题 mask 或分数选择缩放方法」；
@@ -816,6 +817,72 @@ python3 tools/audit_prompt_format.py
 
 ```bash
 python3 tools/build_eval_timing.py     # 重新生成耗时台账
+```
+
+#### 6.2.5 TraceSpatial 3D「病态样本」根因勘误与最大可行覆盖（2026-10-29 更新）
+
+> **勘误**：§6.2/L17 曾把 4 条深景样本（56/78/82/98）判分超时归因于
+> "DBSCAN 在大点云上近似二次复杂度"，**该归因错误**（实测 DBSCAN/目标点云
+> 链路 0.0s 完成）。真实根因（py-spy 栈 + 端到端复现双重证实）：
+> 模型对这几条样本输出**恒定退化轨迹** → 官方距离均匀插值产生 NaN →
+> 官方 3D 路径（无 NaN 过滤，2D 路径有）调用递归版 `discrete_frechet_distance`，
+> 其备忘录判据对 NaN 永假 → **指数级递归、永不终止**。100/100 全量官方判分
+> 对任何变体组合都不可达（16 组合预筛：5 挂 / 2 Skip / 9 可完成）。
+> 完整证据链见 `reports/20` §6。
+
+**TraceSpatial 3D 最大可行覆盖口径**（96 条兜底 + 可完成样本补跑，逐分片
+`sample_index` 标注、排除索引与根因写入产物 `outputs/bench_public_ts3d_best/`）：
+
+| 组合 | 分母 answers/eval | 3D Start | 3D End | Overall | 排除 |
+|---|---|---|---|---|---|
+| 基线 eager / official | 98/98 | 78.57 | 63.27 | 46.94 | 56, 78 |
+| 候选 graph / official | 98/98 | 80.61 | 66.33 | 48.98 | 56, 78 |
+| 基线 eager / upstream | 99/97 | 61.86 | 56.70 | 36.36 | 82 |
+| 候选 graph / upstream | 99/97 | 61.86 | 61.86 | 38.38 | 98 |
+
+与论文 83/63/44 对照：official 变体 End≈63、Success≥44，结论方向与 96 口径一致。
+
+### 6.3 扩展公开基准（论文 Table 2/3 补齐 · 2026-10-29）
+
+> 明细、协议披露、bug 修复复盘与诊断实验见 **`reports/20`**；
+> **A800 交叉验证见 `reports/21`**。论文分仅作同量级对照（协议未公开）；
+> Robo-Dopamine 为可选视频扩展（需独立 GRM 模型），本轮 `NOT_RUN`。
+
+| 基准 | 题数 | K100 (DCU) | A800 (NVIDIA) | 论文 NV | 判分代码 |
+|---|---|---|---|---|---|
+| CrossPoint-Bench | 1000 | **75.20** | — | 75.40 | 官方 `calc_score.py` + `relative_1000` 零改动 |
+| EmbSpatial-Bench | 3640 | **77.77** | — | 75.58 | ⚠️ 自建 MC（官方未发布代码，已披露） |
+| RoboSpatial-Home | 350 | **62.0** | 62.86 | 73.03 | 官方 `eval_pregenerated_results` 零改动 |
+| Q-Spatial-Bench | 101 | **60.4%** | 69.3% | 73.53 | 官方公式复刻 + 披露兜底抽取 |
+| MSMU-Bench | 987 | 定量 47.0~76.4%（δ1.25~1.95）/ 定性 63.8% | — | 64.17 | 官方 `judge_prompt`（judge=本服务，greedy） |
+| ShareRobot-T | 200 | DFD **0.181** | — | 0.1164 | FlagEvalMM **PR#84** 零改动 |
+| ShareRobot-A | 200 | mIoU 0.019（GT 原始分辨率与缩略图参考系错配，不可靠） | — | —（论文未报） | 同上 |
+| VABench-V | 300 | DFD **0.413** | — | 0.1281 | ⚠️ 官方判分未发布，PR84 同款几何指标（披露替代） |
+
+**跨硬件对照（`reports/21`）**：RoboSpatial A800 62.86 vs K100 62.0（Δ0.86pt，
+同一保守偏置）——缺口在 bench 配置侧（官方 harness 提供深度输入；喂深度后
+compat 41.0→54.3%）。Q-Spatial A800 69.3% vs K100 60.4%（+8.9pt）：逐题配对
+分析显示净差几乎全来自 ratio≈2 判定边界翻转（19/101 题在线界附近），属长链
+数值估计对 bf16 微分歧与版本差的高敏感性，**非系统性算子错误**；A800 距论文
+仍差 4.2pt，缺口主因仍是提示引导/模型估计质量（官方模板间变体实验：裸题 38.6%
+vs steps 模板 60.4%）。
+
+**偏差归因一览**（全部非算子侧；算子保真另有 CV-Bench A800↔DCU 99.6% 逐题
+一致旁证，`reports/19_a800_cross_validation.md`）：
+
+| 偏差 | 归因 |
+|---|---|
+| CV-Bench −6.46pt | `Count` 子任务：小目标漏检 + 实例标注口径（15 例人工目视核实） |
+| RoboSpatial −11pt | 模型保守偏置 + 官方跑法疑用深度输入（已实证 +13pt） |
+| Q-Spatial −13pt | 提示引导/估计质量（模板变体差 21.8pt；跨硬件边界翻转 +8.9pt） |
+| ShareRobot-T / VABench-V | 初版坐标适配层括号缺陷虚高（0.181/0.413 为修复后值） |
+
+```bash
+# 复现（K100 远端，非 eager 服务 graph 30000 起服务后）：
+bash tools/run_new_benches_1.sh     # EmbSpatial + CrossPoint
+bash tools/run_new_benches_2.sh     # RoboSpatial（等 1）
+bash tools/master_bench_queue.sh    # Q-Spatial + MSMU + ShareRobot + VABench（等 2）
+# runner：submission/bench_public/run_{embspatial,crosspoint,robospatial,qspatial,msmu,sharerobot,vabench}.py
 ```
 
 ## 7. 性能参考
