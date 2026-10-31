@@ -1,0 +1,255 @@
+{
+  "schema": "scnet-image-inventory/v1",
+  "collected_at": "2026-10-27T18:05:00+08:00",
+  "collected_by": "会话内浏览器枚举 + Harbor Registry API 核验",
+  "source_ui": "https://www.scnet.cn/ui/aihub/image?keyword=sglang",
+  "search_keyword": "sglang",
+  "total_hits": 22,
+  "pagination": "每页 12 条，共 2 页",
+  "notes": [
+    "平台『框架类型』筛选里没有 SGLang 选项（只有 vLLM / SGInfer 等），SGLang 镜像只能靠名称与描述命中。",
+    "镜像详情页 URL 形态：https://www.scnet.cn/ui/aihub/image/<org>/<imageId> ，版本页为 <imageId>/versions。",
+    "仓库地址形态：appstore.scnet.cn:5000/aihub/dcu/<org>/<image>:<tag>。",
+    "下载/收藏/更新时间为 2026-10-27 18:00 前后在镜像库页面读到的快照值。"
+  ],
+  "images": [
+    {
+      "name": "sglang_qwen3.8_27b_runner",
+      "org": "string199",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "光合社区官方镜像BW1000，添加了notebook，DTK26.04+sglang 0.5.12 。可以单卡免费运行2小时测试。",
+      "updated": "2026-10-27T16:40:00+08:00",
+      "downloads": 73,
+      "registry_verified": false,
+      "note": "描述显式写 DTK26.04 + sglang 0.5.12"
+    },
+    {
+      "name": "jupyter-sglang-qwen3.8",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "光合社区发版镜像， 已验证Qwen、deepseek、glm、kimi等众多模型",
+      "updated": "2026-10-26",
+      "downloads": 56,
+      "registry_verified": false
+    },
+    {
+      "name": "jupyter-sglang-deepseek-v4-dev-20260623",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "",
+      "updated": "2026-10-04",
+      "downloads": 44,
+      "registry_verified": false
+    },
+    {
+      "name": "jupyter-sglang0.5.12-ubuntu22.04-dtk26.04-py3.10-20260620",
+      "org": "wxh01",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "sglang0.5.12-ubuntu22.04-dtk26.04-py3.10-20260620带有jupyter的版本，可用于Qwen3系列模型。",
+      "updated": "2026-10-05",
+      "downloads": 20,
+      "registry_verified": false
+    },
+    {
+      "name": "jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6",
+      "org": "zhr5535",
+      "tags": ["异构加速卡", "PyTorch", "Jupyter"],
+      "desc": "原为光源上的镜像,安装了jupyter，方便notebook开发 https://developer.sourcefind.cn/servicelist/detail?post_id=a053d44c-b3c7-11f0-9a0f-acde48001122&active=TagDownload",
+      "updated": "2026-10-27T20:00:00+08:00",
+      "downloads": 28,
+      "registry_verified": true,
+      "registry_repo": "aihub/dcu/zhr5535/jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6",
+      "registry_tags": ["v1.0"],
+      "note": "★ 本实例当前所用镜像。torch 2.9.0 + vllm 0.15.1 + sglang(残缺)；另含 /opt/conda 与 /opt/sglang-kernel 两个 venv"
+    },
+    {
+      "name": "sglang-0.5.12-ubuntu22.04-dtk26.04-py3.10",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "",
+      "updated": "2026-10-27T16:40:00+08:00",
+      "downloads": 22,
+      "registry_verified": true,
+      "registry_repo": "aihub/dcu/jsyadmin/sglang-0.5.12-ubuntu22.04-dtk26.04-py3.10",
+      "registry_tags": ["v1.0"],
+      "config_created": "2026-07-09T01:11:41Z",
+      "layer_count": 38,
+      "compressed_bytes": 10649318176,
+      "dtk": "26.04 (DTK-26.04-rc4)",
+      "torch": "2.10.0",
+      "vllm": "0.18.1 (+ vllm-hcu 0.18.1)",
+      "sglang": "0.5.12 (+ sglang-router, sglang[diffusion])",
+      "docker_pull": "docker pull appstore.scnet.cn:5000/aihub/dcu/jsyadmin/sglang-0.5.12-ubuntu22.04-dtk26.04-py3.10:v1.0",
+      "note": "★★ 迁移首选：与本节点 DTK 同代（26.04-rc4），但 torch/vllm/sglang 全部换栈到 2.10.0 / 0.18.1 / 0.5.12(das185)"
+    },
+    {
+      "name": "jupyterlab-sglang",
+      "org": "wanglufei1984",
+      "tags": ["异构加速卡", "文本生成", "Jupyter"],
+      "desc": "基于官方镜像 `harbor.sourcefind.cn:5443/hcu/admin/base/sglang:0.5.12-ubuntu22.04-dtk2604-py3.10` 制作，新增 JupyterLab",
+      "updated": "2026-10-18",
+      "downloads": 6,
+      "registry_verified": false,
+      "note": "透露出官方 base 镜像的仓库路径与 tag"
+    },
+    {
+      "name": "jupyter-sglang-qwen3.8",
+      "org": "ac5vlfhchc",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "sglang qwen3.8",
+      "updated": "2026-09-29",
+      "downloads": 4,
+      "registry_verified": false
+    },
+    {
+      "name": "sglang0.5.12_zhuzhou",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "PyTorch", "Jupyter"],
+      "desc": "sglang0.5.12",
+      "updated": "2026-10-21",
+      "downloads": 3,
+      "registry_verified": false
+    },
+    {
+      "name": "sglang-0.5.10",
+      "org": "aisearch_sudy",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "sglang-0.5.10",
+      "updated": "2026-08-24",
+      "downloads": 3,
+      "registry_verified": false
+    },
+    {
+      "name": "sglang-v2-jupyter",
+      "org": "hww18680316531",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "docker pull pypi.sourcefind.cn/jenkins/model_test_env/sglang:0.5.12-ubuntu22.04-dtk26.04.2-YYBU-py3.10-20260731",
+      "updated": "2026-09-01",
+      "downloads": 2,
+      "registry_verified": false,
+      "note": "DTK 26.04.2 变体（YYBU 分支）"
+    },
+    {
+      "name": "sglang0.5.12-ubuntu22.04-dtk26.04-py3.10-20260620",
+      "org": "clock88731",
+      "tags": ["异构加速卡"],
+      "desc": "Clone from harbor.sourcefind.cn:5443/dcu/admin/base/custom:sglang0.5.12-ubuntu22.04-dtk26.04-py3.10-20260620",
+      "updated": "2026-10-26",
+      "downloads": 2,
+      "registry_verified": false
+    },
+    {
+      "name": "jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "PyTorch", "Jupyter"],
+      "desc": "（同名镜像的另一个上传者）",
+      "updated": "2026-10-10",
+      "downloads": 16,
+      "registry_verified": false
+    },
+    {
+      "name": "qwen3.5_sglang_fix20260818",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "",
+      "updated": "2026-08-28",
+      "downloads": 6,
+      "registry_verified": false
+    },
+    {
+      "name": "sglang0.5.18-ubuntu22.04-dtk2604-py3.10-sf_b075-minimax-h3",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡"],
+      "desc": "sglang 推理 MiniMax H3",
+      "updated": "2026-09-22",
+      "downloads": 5,
+      "registry_verified": true,
+      "registry_repo": "aihub/dcu/jsyadmin/sglang0.5.18-ubuntu22.04-dtk2604-py3.10-sf_b075-minimax-h3",
+      "registry_tags": ["sglang0.5.18-ubuntu22.04-dtk2604-py3.10-sf_b075-minimax-h3"],
+      "config_created": "2026-09-07T15:31:35Z",
+      "image_size_displayed": "33.76 GB",
+      "dtk": "2604",
+      "torch": "2.11.0",
+      "sglang": "0.5.18",
+      "aicc": "nightly dtk_llvm_286f35_202608311711",
+      "note": "★ torch 2.11 + 更新 AICC（llvm 20260831）→ 与本节点 DTK 跨代，落地风险高于 jsyadmin/sglang-0.5.12"
+    },
+    {
+      "name": "qwen3.8_sglang_hjq",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "",
+      "updated": "2026-10-09",
+      "downloads": 4,
+      "registry_verified": false
+    },
+    {
+      "name": "qwen3.8-sglang0.5.12-ubuntu22.04-dtk2604-py3.10",
+      "org": "acb9yhyenr",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "",
+      "updated": "2026-10-16",
+      "downloads": 4,
+      "registry_verified": false
+    },
+    {
+      "name": "flagos-sglang",
+      "org": "guancl",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "",
+      "updated": "2026-10-15",
+      "downloads": 1,
+      "registry_verified": false
+    },
+    {
+      "name": "qwen3.5_sglang_fix20260818",
+      "org": "Qin1024",
+      "tags": ["异构加速卡"],
+      "desc": "",
+      "updated": "2026-08-24",
+      "downloads": 0,
+      "registry_verified": false
+    },
+    {
+      "name": "jupyter_qwen-3.8-flash",
+      "org": "eq1qe",
+      "tags": ["异构加速卡", "Qwen", "Jupyter"],
+      "desc": "实现在海光dcu上适配qwen3.8flash架构使用sglang0.5.12进行推理",
+      "updated": "2026-10-27T12:00:00+08:00",
+      "downloads": 27,
+      "registry_verified": false
+    },
+    {
+      "name": "k100ai_qwen3.8_0828",
+      "org": "stable86",
+      "tags": ["异构加速卡", "Qwen", "PyTorch"],
+      "desc": "sglang0.5.12-K100AI-qwen3.8-0828,转自光合社区 @pqy 大佬",
+      "updated": "2026-10-21",
+      "downloads": 6,
+      "registry_verified": false,
+      "note": "少见的显式 K100AI 命名"
+    },
+    {
+      "name": "sgalng-v0512",
+      "org": "jsyadmin",
+      "tags": ["异构加速卡", "Jupyter"],
+      "desc": "10.16.1.152:5000/jenkins/model_test_env/sglang:0.5.12-ubuntu22.04-dtk2604-shca17-py3.10-20260723-0224",
+      "updated": "2026-08-05",
+      "downloads": 2,
+      "registry_verified": false,
+      "note": "shca17 分支"
+    }
+  ],
+  "related_non_sglang_keyword_hits": [
+    {
+      "name": "vllm_0.21_sf_b075_d2",
+      "hint": "与 sglang0.5.18-...-sf_b075 同批次 sf_b075 栈；vllm 0.21 对应厂商源 vllm-0.21.0+das.dtk2604.torch2100（torch 2.10 系）",
+      "registry_verified": false
+    },
+    {
+      "name": "tmk_0.21.0-ubuntu22.04-dtk2604-py3.10-sf_b075",
+      "hint": "registry 已核验：tag=0.21.0-ubuntu22.04-dtk2604-py3.10-sf_b075, created=2026-10-22, DTK-26.04-rc4, torch==2.10.0, vllm-router==0.1.15+dtk2604.torch2100.2609021808.g1d10e7",
+      "registry_verified": true
+    }
+  ]
+}

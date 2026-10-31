@@ -1,0 +1,64 @@
+/usr/local/lib/python3.10/dist-packages/numpy/core/getlimits.py:549: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  setattr(self, word, getattr(machar, word).flat[0])
+/usr/local/lib/python3.10/dist-packages/numpy/core/getlimits.py:89: UserWarning: The value of the smallest subnormal for <class 'numpy.float64'> type is zero.
+  return self._float_to_str(self.smallest_subnormal)
+/usr/local/lib/python3.10/dist-packages/numpy/core/getlimits.py:549: UserWarning: The value of the smallest subnormal for <class 'numpy.float32'> type is zero.
+  setattr(self, word, getattr(machar, word).flat[0])
+/usr/local/lib/python3.10/dist-packages/numpy/core/getlimits.py:89: UserWarning: The value of the smallest subnormal for <class 'numpy.float32'> type is zero.
+  return self._float_to_str(self.smallest_subnormal)
+[bench-wrapper] vllm image backend mapped to sglang-oai-chat semantics
+/usr/local/lib/python3.10/dist-packages/sglang/benchmark/datasets/image.py:51: UserWarning: High resolution (1920x1080) with 128 total images may take a long time. Consider reducing resolution or image count.
+  return sample_image_requests(
+benchmark_args=Namespace(backend='vllm', base_url=None, host='127.0.0.1', port=30000, ready_check_timeout_sec=60, dataset_name='image', dataset_path='', model='robobrain2.5-8b-nv', served_model_name=None, tokenizer='/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV', num_prompts=128, sharegpt_output_len=None, sharegpt_context_len=None, random_input_len=4096, random_output_len=1024, random_range_ratio=1.0, image_count=1, image_resolution='1080p', random_image_count=False, image_format='jpeg', image_content='random', request_rate=inf, use_trace_timestamps=False, max_concurrency=64, output_file='bench/round1.jsonl', output_details=False, print_requests=False, disable_tqdm=False, disable_stream=False, return_logprob=False, top_logprobs_num=0, token_ids_logprob=None, logprob_start_len=-1, return_routed_experts=False, seed=1, disable_ignore_eos=False, extra_request_body=None, apply_chat_template=False, profile=False, plot_throughput=False, profile_activities=['CPU', 'GPU'], profile_start_step=None, profile_steps=None, profile_num_steps=None, profile_by_stage=False, profile_stages=None, profile_output_dir=None, profile_prefix=None, lora_name=None, lora_request_distribution='uniform', lora_zipf_alpha=1.5, prompt_suffix='', pd_separated=False, profile_prefill_url=None, profile_decode_url=None, flush_cache=False, warmup_requests=1, tokenize_prompt=False, gsp_num_groups=64, gsp_prompts_per_group=16, gsp_system_prompt_len=2048, gsp_question_len=128, gsp_output_len=256, gsp_range_ratio=1.0, gsp_fast_prepare=False, gsp_send_routing_key=False, gsp_num_turns=1, gsp_ordered=False, mooncake_slowdown_factor=1.0, mooncake_num_rounds=1, mooncake_workload='conversation', fake_prefill=False, tag=None, header=None)
+Waiting up to 60s for http://127.0.0.1:30000/v1/models to become ready...
+Server ready in 0.0s.
+Namespace(backend='vllm', base_url=None, host='127.0.0.1', port=30000, ready_check_timeout_sec=60, dataset_name='image', dataset_path='', model='robobrain2.5-8b-nv', served_model_name=None, tokenizer='/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV', num_prompts=128, sharegpt_output_len=None, sharegpt_context_len=None, random_input_len=4096, random_output_len=1024, random_range_ratio=1.0, image_count=1, image_resolution='1080p', random_image_count=False, image_format='jpeg', image_content='random', request_rate=inf, use_trace_timestamps=False, max_concurrency=64, output_file='bench/round1.jsonl', output_details=False, print_requests=False, disable_tqdm=False, disable_stream=False, return_logprob=False, top_logprobs_num=0, token_ids_logprob=None, logprob_start_len=-1, return_routed_experts=False, seed=1, disable_ignore_eos=False, extra_request_body=None, apply_chat_template=True, profile=False, plot_throughput=False, profile_activities=['CPU', 'GPU'], profile_start_step=None, profile_steps=None, profile_num_steps=None, profile_by_stage=False, profile_stages=None, profile_output_dir=None, profile_prefix=None, lora_name=None, lora_request_distribution='uniform', lora_zipf_alpha=1.5, prompt_suffix='', pd_separated=False, profile_prefill_url=None, profile_decode_url=None, flush_cache=False, warmup_requests=1, tokenize_prompt=False, gsp_num_groups=64, gsp_prompts_per_group=16, gsp_system_prompt_len=2048, gsp_question_len=128, gsp_output_len=256, gsp_range_ratio=1.0, gsp_fast_prepare=False, gsp_send_routing_key=False, gsp_num_turns=1, gsp_ordered=False, mooncake_slowdown_factor=1.0, mooncake_num_rounds=1, mooncake_workload='conversation', fake_prefill=False, tag=None, header=None)
+
+#Input tokens: 814210
+#Output tokens: 131072
+#Total images: 128
+#Images per request: 1 (fixed)
+
+Created 128 random jpeg images with average 2089739 bytes per request
+Starting warmup with 1 sequences...
+Warmup completed with 1 sequences. Starting main benchmark run...
+  0%|          | 0/128 [00:00<?, ?it/s]  1%|          | 1/128 [04:37<9:47:26, 277.53s/it] 12%|█▏        | 15/128 [04:37<24:54, 13.23s/it]   30%|██▉       | 38/128 [04:50<19:50, 13.23s/it] 30%|███       | 39/128 [05:11<07:19,  4.94s/it] 38%|███▊      | 48/128 [05:36<05:50,  4.38s/it] 38%|███▊      | 49/128 [06:00<06:49,  5.18s/it] 39%|███▉      | 50/128 [06:24<08:04,  6.22s/it] 40%|███▉      | 51/128 [06:48<09:40,  7.54s/it] 41%|████      | 52/128 [07:06<10:48,  8.54s/it] 41%|████▏     | 53/128 [07:25<12:14,  9.79s/it] 42%|████▏     | 54/128 [07:40<13:04, 10.60s/it] 43%|████▎     | 55/128 [08:00<14:46, 12.15s/it] 44%|████▍     | 56/128 [08:20<16:30, 13.76s/it] 45%|████▍     | 57/128 [08:35<16:37, 14.06s/it] 45%|████▌     | 58/128 [08:51<16:49, 14.42s/it] 46%|████▌     | 59/128 [08:56<13:58, 12.16s/it] 50%|█████     | 64/128 [08:56<04:36,  4.33s/it] 62%|██████▏   | 79/128 [09:10<03:31,  4.33s/it] 62%|██████▎   | 80/128 [09:12<01:28,  1.84s/it] 77%|███████▋  | 99/128 [09:13<00:23,  1.22it/s] 80%|████████  | 103/128 [09:30<00:20,  1.22it/s] 81%|████████▏ | 104/128 [10:02<00:57,  2.38s/it] 82%|████████▏ | 105/128 [10:30<01:22,  3.60s/it] 83%|████████▎ | 106/128 [10:37<01:23,  3.81s/it]100%|██████████| 128/128 [10:37<00:00,  4.98s/it]
+
+============ Serving Benchmark Result ============
+Backend:                                 vllm      
+Traffic request rate:                    inf       
+Max request concurrency:                 64        
+Successful requests:                     128       
+Benchmark duration (s):                  637.24    
+Total input tokens:                      814210    
+Total input text tokens:                 552834    
+Total input vision tokens:               261376    
+Total generated tokens:                  131072    
+Total generated tokens (retokenized):    123555    
+Request throughput (req/s):              0.20      
+Input token throughput (tok/s):          1277.71   
+Output token throughput (tok/s):         205.69    
+Peak output token throughput (tok/s):    455.00    
+Peak concurrent requests:                102       
+Total token throughput (tok/s):          1483.40   
+Concurrency:                             58.36     
+----------------End-to-End Latency----------------
+Mean E2E Latency (ms):                   290523.97 
+Median E2E Latency (ms):                 277415.36 
+P90 E2E Latency (ms):                    413302.77 
+P99 E2E Latency (ms):                    536249.72 
+---------------Time to First Token----------------
+Mean TTFT (ms):                          70643.27  
+Median TTFT (ms):                        43293.90  
+P99 TTFT (ms):                           319927.75 
+-----Time per Output Token (excl. 1st token)------
+Mean TPOT (ms):                          214.94    
+Median TPOT (ms):                        226.15    
+P99 TPOT (ms):                           457.25    
+---------------Inter-Token Latency----------------
+Mean ITL (ms):                           223.14    
+Median ITL (ms):                         136.57    
+P95 ITL (ms):                            790.06    
+P99 ITL (ms):                            811.62    
+Max ITL (ms):                            273734.57 
+==================================================

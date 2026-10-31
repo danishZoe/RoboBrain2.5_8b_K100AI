@@ -1,0 +1,144 @@
+{
+  "MODEL_ID": "BAAI/RoboBrain2.5-8B-NV",
+  "CARD": "K100-AI",
+  "FRAMEWORK": "vllm",
+  "PRECISION": "bf16",
+  "generated_at": "2026-10-30T10:25:26",
+  "status": "BLOCKED",
+  "reason": "官方基线文件 baselines/BAAI__RoboBrain2.5-8B-NV.json 未下发；官方评测数据集与判分器同样未下发。按验收标准第 2 节，精度项必须标记为 BLOCKED，不得用自行选择的 demo 或自建 GPU 结果替代官方 98% 验收证据。",
+  "internal_metric": {
+    "name": "同卡不同后端逐坐标一致性（非官方指标）",
+    "note": "transformers 直跑基线 vs vLLM serving；不能替代官方 GPU 参考输出一致率",
+    "identical": 2,
+    "total": 6,
+    "detail": {
+      "official_general": {
+        "baseline": {
+          "text": "The image shows a white ceramic mug filled with a dark liquid, likely coffee or tea, placed on a rustic wooden surface. In the background, there is a blurred view of what appears to be a laptop or a similar electronic device. The overall setting suggests a cozy and casual environment, possibly a workspace or a café. The lighting is soft, giving the scene a warm and inviting feel."
+        },
+        "serving": {
+          "text": "The image shows a white ceramic mug filled with a dark liquid, likely coffee or tea, placed on a rustic wooden surface. In the background, there is a blurred view of what appears to be a laptop or a similar electronic device. The overall setting suggests a cozy and casual environment, possibly a workspace or a quiet spot for enjoying a hot beverage. The lighting is soft, giving the scene a warm and inviting feel."
+        },
+        "identical": false
+      },
+      "official_grounding": {
+        "baseline": {
+          "bbox": [
+            0,
+            309,
+            620,
+            989
+          ]
+        },
+        "serving": {
+          "bbox": [
+            0,
+            309,
+            620,
+            989
+          ]
+        },
+        "identical": true
+      },
+      "official_affordance": {
+        "baseline": {
+          "points": [
+            {
+              "x": 901,
+              "y": 600
+            }
+          ]
+        },
+        "serving": {
+          "points": [
+            {
+              "x": 904,
+              "y": 600
+            }
+          ]
+        },
+        "identical": false
+      },
+      "official_pointing": {
+        "baseline": {
+          "points": [
+            {
+              "x": 582,
+              "y": 725
+            }
+          ]
+        },
+        "serving": {
+          "points": [
+            {
+              "x": 582,
+              "y": 725
+            }
+          ]
+        },
+        "identical": true
+      },
+      "official_navigation": {
+        "baseline": {
+          "points": [
+            {
+              "x": 400,
+              "y": 376
+            }
+          ]
+        },
+        "serving": {
+          "points": [
+            {
+              "x": 400,
+              "y": 375
+            }
+          ]
+        },
+        "identical": false
+      },
+      "official_trajectory": {
+        "baseline": {
+          "points": [
+            [
+              294,
+              525,
+              0.577
+            ],
+            [
+              405,
+              350,
+              0.607
+            ],
+            [
+              525,
+              300,
+              0.72
+            ]
+          ]
+        },
+        "serving": {
+          "points": [
+            [
+              301,
+              525,
+              0.572
+            ],
+            [
+              405,
+              350,
+              0.607
+            ],
+            [
+              525,
+              300,
+              0.722
+            ]
+          ]
+        },
+        "identical": false
+      }
+    }
+  },
+  "passed": false
+}

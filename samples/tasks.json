@@ -1,0 +1,53 @@
+[
+  {
+    "id": "general_01",
+    "task": "general",
+    "image": "red_hat.png",
+    "prompt": "What is shown in this image?",
+    "max_new_tokens": 96,
+    "expect": "描述画面中有一顶红帽和杯子"
+  },
+  {
+    "id": "grounding_01",
+    "task": "grounding",
+    "image": "red_hat.png",
+    "prompt": "the red hat",
+    "max_new_tokens": 64,
+    "do_sample": false,
+    "expect": "返回红帽所在位置"
+  },
+  {
+    "id": "pointing_01",
+    "task": "pointing",
+    "image": "red_hat.png",
+    "prompt": "the affordance area for holding the cup",
+    "max_new_tokens": 64,
+    "do_sample": false,
+    "expect": "返回杯子可抓取区域"
+  },
+  {
+    "id": "trajectory_01",
+    "task": "trajectory",
+    "image": "objects.png",
+    "prompt": "reach for the banana on the plate",
+    "max_new_tokens": 128,
+    "do_sample": false,
+    "expect": "返回抓取香蕉的关键点序列"
+  },
+  {
+    "id": "general_02",
+    "task": "general",
+    "image": "navigation.png",
+    "prompt": "Describe the scene in this image.",
+    "max_new_tokens": 96,
+    "expect": "描述房间内有沙发、门和茶几"
+  },
+  {
+    "id": "navigation_01",
+    "task": "pointing",
+    "image": "navigation.png",
+    "prompt": "Identify spot within the sofa in the house",
+    "max_new_tokens": 64,
+    "expect": "返回沙发上的目标点"
+  }
+]
