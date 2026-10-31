@@ -8,4 +8,5 @@ repo_layout   = submission scripts tools configs samples patches reports platfor
 note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs、logs 未纳入
                  （隔离依赖与运行产物，可由提交包脚本重新生成）。
                  代码托管：https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai
-                 本次交付配置 = 最优版：graph(非 eager) + GEMM 算子调优库 + ROCM_AITER_FA
+                 本次交付配置 = 最优版：graph(非 eager) + GEMM 算子调优库 + ROCM_AITER_FArevision_note_commit= f6122c7bb43dcb4e9ff9da42b3205ae73fb04d9b
+revision_note_short = f6122c7
