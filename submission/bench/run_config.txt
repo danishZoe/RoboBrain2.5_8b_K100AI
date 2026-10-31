@@ -1,0 +1,9 @@
+# bench run started: 2026-10-27T13:58:58+08:00
+# host: crdnotebook-2114695384420274177-scnjz2s4uc-92379
+# server: python3 /root/private_data/workspace/robo/submission/scripts/serve_vllm_patched.py --model /public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV --served-model-name robobrain2.5-8b-nv --host 127.0.0.1 --port 30000 --tensor-parallel-size 1 --pipeline-parallel-size 1 --max-model-len 32768 --gpu-memory-utilization 0.85 --dtype bfloat16 --trust-remote-code --enforce-eager --no-enable-prefix-caching --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt={"image":8}
+# env: FRAMEWORK=vllm CARD=K100-AI PRECISION=bf16 TP=1 PORT=30000 MAX_LEN=32768 MEM_FRAC=0.85
+#     EXTRA_ARGS=--enforce-eager --no-enable-prefix-caching --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt={"image":8}
+# cgroup mem limit: 123480309760
+# kv cache: GPU KV cache size: 253,312 tokens
+# client: sglang 0.0.0.dev0 / sglang.bench_serving (legacy module name)
+# NOTE: no ignore-eos flag -> client default ignore_eos=True -> 每请求实际生成满 1024 token

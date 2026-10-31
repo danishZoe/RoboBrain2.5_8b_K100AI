@@ -1,0 +1,34 @@
+# 在镜像基础上新增 / 升级的包。每行一个包，版本写死；行尾注明镜像内原版本与原因。
+#
+# run.sh 用 `--no-deps` 安装，防依赖解析把镜像里的国产异构加速器版 torch 换成 CUDA 版，
+# 所以连带依赖要逐个列全。
+#
+# 本次**没有升级任何核心依赖**（torch / transformers / vllm 全部沿用镜像内版本），
+# 适配问题出在 vLLM × transformers 的 config API 错位（见 patches/），用垫片解决。
+#
+# 唯一新增的是官方 upstream 推理链路需要的图像加载库：
+#   qwen-vl-utils 0.0.14 —— 官方 inference.py 的 process_vision_info() 依赖它。
+#   本容器 site-packages 只读，因此装到工作目录内的隔离前缀 envs/pylibs（见 run.sh）。
+#   它连带依赖 matplotlib / pillow 系，全部列在下面，用 --no-deps 逐个安装。
+#
+# 安装命令（run.sh 中执行）：
+#   pip install -q --no-deps --target "$WORK_DIR/envs/pylibs" \
+#       -r requirements-extra.txt
+#
+# ---------------------------------------------------------------------------
+# 下面这份清单与 `envs/pylibs/` 里实际安装的包**逐个对应**（10 个 dist-info），
+# 由 `tools/record_revision.sh` 的清单校验覆盖：干净复现时按此文件装出来的
+# 隔离前缀与本节点使用的完全一致（验收标准 §7.2「冻结版本的额外依赖」）。
+# pillow 未列入：镜像内已有 11.3.0（/usr/local/lib/python3.10/dist-packages/PIL），
+# 不重复安装，也不覆盖公共环境。
+# ---------------------------------------------------------------------------
+qwen-vl-utils==0.0.14      # 镜像未自带 → 新装：官方 inference.py 的 process_vision_info 依赖
+matplotlib==3.10.7         # qwen-vl-utils 的连带依赖
+contourpy==1.3.2           # matplotlib 的连带依赖
+cycler==0.12.1             # matplotlib 的连带依赖
+fonttools==4.60.1          # matplotlib 的连带依赖
+kiwisolver==1.4.8          # matplotlib 的连带依赖
+pyparsing==3.2.3           # matplotlib 的连带依赖
+pypdf==6.21.2              # qwen-vl-utils 的连带依赖
+pypdfium2==5.14.0          # qwen-vl-utils 的连带依赖
+typing_extensions==4.16.0  # qwen-vl-utils 的连带依赖

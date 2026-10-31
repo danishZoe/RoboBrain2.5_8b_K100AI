@@ -1,0 +1,137 @@
+{
+  "source_probe": "outputs/phase5_probe_canonical/probe_result.json",
+  "backend": "vllm",
+  "url": "http://127.0.0.1:8000/v1/chat/completions",
+  "coordinate_convention": "0~1000 归一化（与上游 draw_on_image 一致）",
+  "parser": "scripts/robo_infer.py::parse_answer（与官方正则逐字一致）",
+  "samples": [
+    {
+      "sample_id": "official_general",
+      "task": "general",
+      "prompt": "What is shown in this image?",
+      "image": "samples/images/official_affordance.jpg",
+      "raw_output": "The image shows a white ceramic mug filled with a dark liquid, likely coffee or tea, placed on a rustic wooden surface. In the background, there is a blurred view of what appears to be a laptop or a similar electronic device. The overall setting suggests a cozy and casual environment, possibly a workspace or a quiet spot for enjoying a hot beverage. The lighting is soft, giving the scene a warm and inviting feel.",
+      "parsed": {},
+      "finish_reason": "stop",
+      "gen_tokens": 85,
+      "seconds": 11.8692,
+      "annotated_overlay": "annotated/official_general.png",
+      "annotated_overlay_sha256": "51b6f3b044f88d2231f81df3118954fe8136d548fea063e7ac3dff41093a21b7"
+    },
+    {
+      "sample_id": "official_grounding",
+      "task": "grounding",
+      "prompt": "the person wearing a red hat",
+      "image": "samples/images/official_grounding.jpg",
+      "raw_output": "[0, 309, 620, 989]",
+      "parsed": {
+        "boxes": [
+          [
+            0,
+            309,
+            620,
+            989
+          ]
+        ]
+      },
+      "finish_reason": "stop",
+      "gen_tokens": 19,
+      "seconds": 0.9148,
+      "annotated_overlay": "annotated/official_grounding.png",
+      "annotated_overlay_sha256": "fa558f460d5b5dadca052c5a0466a2dad743fed4b9281a618d79c540d105d05f"
+    },
+    {
+      "sample_id": "official_affordance",
+      "task": "pointing",
+      "prompt": "the affordance area for holding the cup",
+      "image": "samples/images/official_affordance.jpg",
+      "raw_output": "[(904, 600)]",
+      "parsed": {
+        "points": [
+          [
+            904,
+            600
+          ]
+        ]
+      },
+      "finish_reason": "stop",
+      "gen_tokens": 11,
+      "seconds": 0.5237,
+      "annotated_overlay": "annotated/official_affordance.png",
+      "annotated_overlay_sha256": "03fcbc6ef8b58c91abf1824c93bfaab7c401d924198e2bfee3564c34a5dc8093"
+    },
+    {
+      "sample_id": "official_pointing",
+      "task": "pointing",
+      "prompt": "Identify spot within the vacant space that's between the two mugs",
+      "image": "samples/images/official_pointing.jpg",
+      "raw_output": "[(582, 725)]",
+      "parsed": {
+        "points": [
+          [
+            582,
+            725
+          ]
+        ]
+      },
+      "finish_reason": "stop",
+      "gen_tokens": 11,
+      "seconds": 0.6165,
+      "annotated_overlay": "annotated/official_pointing.png",
+      "annotated_overlay_sha256": "05f92b97103fe814805c23c091a5d3b0aac64eee5849274560c24524d24bcb85"
+    },
+    {
+      "sample_id": "official_navigation",
+      "task": "pointing",
+      "prompt": "Identify spot within toilet in the house",
+      "image": "samples/images/official_navigation.jpg",
+      "raw_output": "[(400, 375)]",
+      "parsed": {
+        "points": [
+          [
+            400,
+            375
+          ]
+        ]
+      },
+      "finish_reason": "stop",
+      "gen_tokens": 11,
+      "seconds": 1.2225,
+      "annotated_overlay": "annotated/official_navigation.png",
+      "annotated_overlay_sha256": "90535493a64ec144ad2f05ab0a81d08973e675dd9b5f1e45cf933bb26302bc17"
+    },
+    {
+      "sample_id": "official_trajectory",
+      "task": "trajectory",
+      "prompt": "reach for the banana on the plate",
+      "image": "samples/images/official_trajectory.jpg",
+      "raw_output": "[(301, 525, 0.572), (405, 350, 0.607), (525, 300, 0.722)]",
+      "parsed": {
+        "trajectories": [
+          [
+            [
+              301,
+              525,
+              0.572
+            ],
+            [
+              405,
+              350,
+              0.607
+            ],
+            [
+              525,
+              300,
+              0.722
+            ]
+          ]
+        ]
+      },
+      "finish_reason": "stop",
+      "gen_tokens": 52,
+      "seconds": 2.1669,
+      "annotated_overlay": "annotated/official_trajectory.png",
+      "annotated_overlay_sha256": "0a08c43f9c5d16ee5ebb9ae1cfc566b7adc805b852b519347141c229ebace9ce"
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+== 健康检查
+HTTP 200
+== 模型列表
+{"object":"list","data":[{"id":"robobrain2.5-8b-nv","object":"model","created":1793078025,"owned_by":"vllm","root":"/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV","parent":null,"max_model_len":20480,"permission":[{"id":"modelperm-a1473da322f835f7","object":"model_permission","created":1793078025,"allow_create_engine":false,"allow_sampling":true,"allow_logprobs":true,"allow_search_indices":false,"allow_view":true,"allow_fine_tuning":false,"organization":"*","group":null,"is_blocking":false}]}]}
+== 单轮图文
+{"id":"chatcmpl-a138056bd96c1f9a","object":"chat.completion","created":1793078025,"model":"robobrain2.5-8b-nv","choices":[{"index":0,"message":{"role":"assistant","content":"The image shows a white ceramic mug filled with a dark liquid, likely coffee or tea, placed on a rustic wooden surface. In the background, there is a blurred view of what appears to be a laptop or a similar electronic device. The overall setting suggests a cozy and casual environment, possibly a workspace or a quiet spot for enjoying a hot beverage. The lighting is soft, giving the scene a warm and inviting feel.","refusal":null,"annotations":null,"audio":null,"function_call":null,"tool_calls":[],"reasoning":null,"reasoning_content":null},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":null}],"service_tier":null,"system_fingerprint":null,"usage":{"prompt_tokens":277,"total_tokens":362,"completion_tokens":85,"prompt_tokens_details":null},"prompt_logprobs":null,"prompt_token_ids":null,"kv_transfer_params":null}
+== 多轮图文（第二轮问「杯子里是什么？」）
+{"id":"chatcmpl-aa6863088e8a2ba3","object":"chat.completion","created":1793078028,"model":"robobrain2.5-8b-nv","choices":[{"index":0,"message":{"role":"assistant","content":"White.","refusal":null,"annotations":null,"audio":null,"function_call":null,"tool_calls":[],"reasoning":null,"reasoning_content":null},"logprobs":null,"finish_reason":"stop","stop_reason":null,"token_ids":null}],"service_tier":null,"system_fingerprint":null,"usage":{"prompt_tokens":300,"total_tokens":303,"completion_tokens":3,"prompt_tokens_details":null},"prompt_logprobs":null,"prompt_token_ids":null,"kv_transfer_params":null}
+== 流式（末行应为 data: [DONE]）
+
+data: [DONE]
+
+
+== 四类任务 + 多图 + 异常输入
+[smoke] health=200 models=200
+[smoke] F01_general      status=200 parsed={'text': 'The image shows a white ceramic mug filled with a dark liquid, likely coffee or tea, placed on a rustic wooden surface. In the background, there is a blurred view of what appears to be a laptop or a similar electronic device. The overall setting suggests a cozy and casual environment, possibly a workspace or a quiet spot for enjoying a hot beverage. The lighting is soft, giving the scene a warm and inviting feel.'}
+[smoke] F02_grounding    status=200 parsed={'bbox': [0, 309, 620, 989]}
+[smoke] F03_affordance   status=200 parsed={'points': [{'x': 904, 'y': 600}]}
+[smoke] F04_pointing     status=200 parsed={'points': [{'x': 582, 'y': 725}]}
+[smoke] F05_navigation   status=200 parsed={'points': [{'x': 400, 'y': 375}]}
+[smoke] F06_trajectory   status=200 parsed={'points': [[301, 525, 0.572], [405, 350, 0.607], [525, 300, 0.722]]}
+[smoke] F07_multi_image status=200 len=2539
+[smoke] F08a_corrupt_image               status=400 accepted=False
+[smoke] F08b_unreachable_image           status=200 accepted=False
+[smoke] F08c_malformed_data_url          status=400 accepted=False
+[smoke] F08d_spatial_task_two_images     status=200 accepted=True
+[smoke] streaming identical=True chunks=84 ttft=0.1215
+[smoke] multi_turn status=200 len=592
+[smoke] wrote /root/private_data/workspace/robo/outputs/phase5_smoke/smoke_results.json
+== smoke done
