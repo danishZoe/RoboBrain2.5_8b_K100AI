@@ -229,8 +229,9 @@ env -u VLLM_ATTENTION_BACKEND bash tools/start_bench_service.sh graph 30000
 | 赛事官方 ≥98% 一致率 | **BLOCKED** | 官方 GPU 参考输出、官方测试集、官方判分器均未下发；节点无外网 |
 | 公开基准（RefSpatial 等）复跑 | NOT_RUN（本轮） | 本轮任务范围不含精度测试 |
 | 16384/c64 档轮次 | **单轮** | 该档单轮耗时 3 h 48 min（128 请求排队 69 min，TTFT 均值 4,134,411 ms），两轮需 7.5 h+；其余五档均为两轮。表格已标注轮数 |
-| 16384/c64 档的同节点 graph 基线对照 | NOT_RUN | 同节点 graph 基线补测只覆盖 无 三档；该档基线单轮同样需 ~3.8 h，本轮未再跑 |
+| 16384/c64 档的同节点 graph 基线对照 | NOT_RUN | 该档无同节点 graph 基线对照：基线补测结果因节点中断未能取回，而该档基线单轮同样需 ~3.8 h |
 | 本轮压测结果的取回方式 | **会话日志转录** | 2026-11-01 05:08 起 dcu_1026 容器不可达（网关端口可连但收不到 SSH banner，同网关其他容器正常），节点工作目录无法访问；最优版六档结果由压测客户端与汇总脚本的**原样输出**转录恢复（见 `reports/evidence/bench_recovered_20261101/`），因此**不是客户端原始 jsonl 文件**，其中 3 个档位的 `total_throughput` / `p99_ttft_ms` / `p99_tpot_ms` 未被留存，表中以 `—` 标注 |
+| 同节点 graph 基线补测（16384/并发1、16384/并发8、4096/并发64） | NOT_RUN | 补测于 2026-11-01 04:36 启动（graph 基线服务 READY after 230 s），预期 05:05 完成，但节点在 05:08 断开，结果未能取回；同节点 graph 基线对照因此只覆盖 4096/并发1、4096/并发8 两档 |
 | c64 以上并发摸高 | NOT_RUN | 受单卡 KV cache 容量限制（253,312 token），本轮只跑官方六档 |
 | 长稳 | NOT_RUN | 用户暂缓 |
 | HIP Trace / PMC 剖析 | PARTIAL | 10-30 只用 rocBLAS layer3 调用频次定位热点，未采 HIP Trace（`reports/23` §5 缺口清单） |

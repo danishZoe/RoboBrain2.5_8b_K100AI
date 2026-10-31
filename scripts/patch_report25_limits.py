@@ -49,26 +49,32 @@ def main():
             "| 16384/c64 档轮次 | **单轮** | 该档单轮耗时 3 h 48 min"
             "（128 请求排队 69 min，TTFT 均值 4,134,411 ms），两轮需 7.5 h+；"
             "其余五档均为两轮。表格已标注轮数 |")
-    if "同节点 graph 基线补测" not in text:
-        covered = "、".join(f"{i}/{c}" for (i, c) in ORDER if (i, c) in got) or "无"
+    # --- 同节点 graph 基线补测整体状态 ---
+    if "| 同节点 graph 基线补测（" not in text:
         if got:
-            state, why = "已完成", f"覆盖 {covered}"
+            state = "已完成"
+            why = ("补测于 2026-11-01 04:36 启动（graph 基线服务 READY after 230 s），"
+                   "覆盖 " + "、".join(f"{i}/并发{c}" for (i, c) in ORDER if (i, c) in got))
         else:
             state = "NOT_RUN"
             why = ("补测于 2026-11-01 04:36 启动（graph 基线服务 READY after 230 s），"
                    "预期 05:05 完成，但节点在 05:08 断开，结果未能取回；"
-                   "因此同节点 graph 基线对照只覆盖 4096/并发1、4096/并发8 两档")
+                   "同节点 graph 基线对照因此只覆盖 4096/并发1、4096/并发8 两档")
         rows.append(f"| 同节点 graph 基线补测（16384/并发1、16384/并发8、4096/并发64） | {state} | {why} |")
-    if "16384/c64 档的同节点 graph 基线对照" not in text:
-        if (16384, 64) in got:
-            state = "已完成"
-            why = "基线补测覆盖了该档"
-        else:
-            state = "NOT_RUN"
-            why = ("同节点 graph 基线补测未覆盖该档（补测结果因节点中断未能取回）；"
-                   "该档基线单轮同样需 ~3.8 h")
-        rows.append(
-            f"| 16384/c64 档的同节点 graph 基线对照 | {state} | {why} |")
+    # --- 16384/c64 档的基线对照：存在则重写措辞，不存在则新增 ---
+    if (16384, 64) in got:
+        state = "已完成"
+        why = "基线补测覆盖了该档"
+    else:
+        state = "NOT_RUN"
+        why = ("该档无同节点 graph 基线对照：基线补测结果因节点中断未能取回，"
+               "而该档基线单轮同样需 ~3.8 h")
+    c64_row = f"| 16384/c64 档的同节点 graph 基线对照 | {state} | {why} |"
+    if "| 16384/c64 档的同节点 graph 基线对照" in text:
+        text = re.sub(r"^\| 16384/c64 档的同节点 graph 基线对照 \|.*$",
+                      lambda _m: c64_row, text, count=1, flags=re.M)
+    else:
+        rows.append(c64_row)
     if "本轮压测结果的取回方式" not in text:
         rows.append(
             "| 本轮压测结果的取回方式 | **会话日志转录** | "
