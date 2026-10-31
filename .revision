@@ -7,4 +7,5 @@ manifest      = submission/MANIFEST.sha256
 repo_layout   = submission scripts tools configs samples patches reports platform
 note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs、logs 未纳入
                  （隔离依赖与运行产物，可由提交包脚本重新生成）。
-                 代码托管：https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai
+                 代码托管：https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100airevision_note_commit= 
+revision_note_short = 
