@@ -1,0 +1,2 @@
+gemmtype,TransA,TransB,M,N,K,B,lda,ldb,ldc,ldd,strideA,strideB,strideC,strideD
+bf16,T,N,1152,65536,1536,1,1536,1536,1152,1152,1,1,1,1

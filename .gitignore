@@ -27,3 +27,16 @@ submission/logs/
 .env
 *.token
 *.key
+
+# 运行时组装的 rocBLAS 调优库（仓库内只提交 6 个差异文件，运行时装配目录不进仓库）
+/rocblas_tuned/
+
+# 进程崩溃转储（节点上出现过 3 GB 级 core 文件，绝不能进仓库）
+core
+core.*
+
+# 厂商 GEMM 调优工具的工作目录（4 个实例合计 8 GB+，含 Tensile 二进制与旧库副本）。
+# 可复核的关键证据（选优日志、shape 采集、算子级对比 CSV）已固化到
+# reports/evidence/gemm_tuning_20261030/；生效的候选库差异文件在
+# submission/rocblas_tuned/library_gpu4/。
+tools/auto_select_tools*/

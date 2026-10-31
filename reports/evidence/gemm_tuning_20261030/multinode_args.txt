@@ -1,0 +1,21 @@
+################################
+#   多节点配置文件参数配置文件   #
+################################
+
+# -------------------------
+# 配置文件基础设置(必须设置)
+# -------------------------
+tune_type=custom infer general            # 可选：custom | infer | general（可多选）
+hardware_type=BW                          # 平台类型：ZF | ZF2 | KM | KME | ECO | BW
+cu_count=0                                # 根据实际环境cu数量设置，用于匹配不同cu的配置文件，0 表示使用无后缀的兜底配置文件
+strategy=merge                            # 配置生成策略：merge | common | None (默认为merge)
+
+# -------------------------
+# 测试相关设置(默认不启用测试)
+# -------------------------
+gpu_ids=2 3 4                             # 可以指定多个GPU编号
+tune_warmup_times=2                       # 选优预热次数
+tune_loop_times=4                         # 选优循环次数
+bench_warmup_times=2                      # 测试预热次数
+bench_loop_times=10                       # 测试循环次数
+test_times=1                              # 测试轮次 

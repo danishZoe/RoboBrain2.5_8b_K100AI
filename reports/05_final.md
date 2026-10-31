@@ -4,6 +4,12 @@
 > 镜像：`jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`
 > 提交包：`submission/`（`README.md` 为官方模板的正式报告，见 `submission/README.md`）
 > 本文件是给评审/复跑者看的**总览与索引**。
+>
+> **2026-10-31 更新**：提交配置已由「eager 首提基线」切换为**最优版**
+> （graph + GEMM 算子调优库 + `ROCM_AITER_FA`）。完整压测、对比、组装与生效证据、
+> 回退方法见 **`reports/25_tuning_delivery_20261031.md`**；
+> 逐档对比表见 **`reports/tuning_comparison.md`**。
+> 首提基线材料（`submission/bench/round*.jsonl`、GitLab 标签 `baseline-submission`）全部保留。
 
 ---
 
@@ -93,10 +99,28 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
 
 ### 4.1 提交口径：官方六档负载压测（vLLM serving，image 数据集）
 
-口径：单卡 K100AI / vLLM 0.15.1 / BF16 / `--enforce-eager` / `--max-model-len 32768` /
+口径（**最优版 = 当前提交配置**：graph 非 eager + GEMM 调优库 + `ROCM_AITER_FA`）：
+单卡 K100AI / vLLM 0.15.1 / BF16 / `--max-model-len 32768` /
 `--gpu-memory-utilization 0.85` / `--max-num-batched-tokens 4096` / `--max-num-seqs 64` /
 `--no-enable-prefix-caching`；客户端为官方指定的 `sglang.bench_serving`，
 每请求 1 张 1080p 图，`--seed 1`，请求数 `max(8, 2×并发)`，输出实际打满 1024 token。
+
+<!-- BEST_BENCH_TABLE:BEGIN -->
+**最优版（当前提交配置）六档实测**
+
+| random_input_len | random_output_len | max_concurrency | completed | duration | request_throughput | output_throughput | total_throughput | mean_ttft_ms | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4096 | 1024 | 1 | 8 | 285.07 | 0.03 | 28.74 | 207.23 | 1448.69 | 1630.32 | 33.42 | 33.62 | 35632.50 |
+| 4096 | 1024 | 8 | 16 | 141.29 | 0.11 | 115.96 | 836.86 | 9786.72 | 10444.80 | 59.46 | 66.23 | 70614.40 |
+| 4096 | 1024 | 64 | 128 | 941.54 | 0.14 | 139.21 | — | 114388.36 | — | 309.35 | — | 430852.94 |
+| 16384 | 1024 | 1 | 8 | 426.14 | 0.02 | 19.22 | 381.56 | 6717.82 | 6826.51 | 45.50 | 48.37 | 53266.30 |
+| 16384 | 1024 | 8 | 16 | 363.36 | 0.04 | 45.09 | — | 25831.20 | — | 151.86 | — | 181184.52 |
+| 16384 | 1024 | 64 | 128 | 13667.91 | 0.01 | 9.59 | — | 4134411.49 | 6101802.49 | 1416.31 | — | 5583300.15 |
+
+> 原始数据 `outputs/fullbench_candidate_20261031_231152/`，对比与逐轮波动见 `reports/25_tuning_delivery_20261031.md` §4 与 `reports/tuning_comparison.md`。
+<!-- BEST_BENCH_TABLE:END -->
+
+**首提基线（eager，冻结基准）同口径原始结果**（口径同上，仅多 `--enforce-eager`、stock rocBLAS 库、默认 attention）：
 
 <!-- FINAL_BENCH_TABLE -->
 | random_input_len | random_output_len | max_concurrency | completed | duration | request_throughput | output_throughput | total_throughput | mean_ttft_ms | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
@@ -129,6 +153,20 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
 | E2 | `--max-num-batched-tokens` 4096 / 8192 / 16384 | 8192 档 16384/1：吞吐 -0.2%、TTFT -1.9%；8192 档 16384/8：吞吐 +0.5%、TTFT +30.5%；16384 档 16384/1：吞吐 +0.2%、TTFT -4.1%；16384 档 16384/8：吞吐 +3.4%、TTFT +74.7% | **不采纳**（无取值同时满足「吞吐 >3% + TTFT 下降 + 无失败」，回退 4096） |
 | E3 | 厂商 GEMM 算子调优 | 本节点无 `auto_select_tools` / shape 数据 / rocprof，**不具备执行条件**；trace 亦未产出 | 不适用 |
 | E4 | 输出 token 计量口径核验 | 引擎生成量 = 计划量 95.6%–99.7%，**无提前 EOS**；官方吞吐列可直接填报 | **采纳** |
+
+**2026-10-30 graph 基线之后的第二轮调优（E5–E9）**，明细见
+`reports/23_tuning_progress_20261030.md`：
+
+| 实验 | 变量 | 结果（实测） | 采纳 |
+|---|---|---|---|
+| E5 | GEMM 算子调优库（`ROCBLAS_TENSILE_LIBPATH`） | 算子级 107 size：104 升 / 1 平 / 2 微降，中位 +19.1%，LM head +83%；服务级 4096/c1 **+23.8%**、4096/c8 **+19.9%**、4096/c64 +5.3%、16384/c1 +1.2%（噪声内） | **采纳** |
+| E6 | `--gpu-memory-utilization` 0.85 → 0.90 | 并发 8 档门槛 -2.8%，按协议中止 | 否决 |
+| E7 | `VLLM_ATTENTION_BACKEND=ROCM_AITER_FA` | 16384/c1 **+17.9%**（TPOT 34.66 → 28.85 ms），其余档持平 | **采纳** |
+| E8 | `VLLM_ROCM_USE_AITER=1`（aiter 总开关） | 启动期 ViT `mm_encoder_attention` flash op 崩溃，EngineCore 起不来 | 否决 |
+| E9 | `compile_mm_encoder=true` | 两档均落在噪声内（-1.3%），启动更慢 | 否决 |
+
+> **E5 + E7 构成当前提交配置**（最优版）。调优只改算子实现与执行路径，
+> 不改权重、精度、提示词与采样语义。
 
 判定标准均在实验前登记（`reports/11_tuning_experiments.md` §2.2 / §3.3 / §5.2），完整结果与原始数据见该报告各节与 `outputs/phase5_ab_*`。
 <!-- /FINAL_TUNING_TABLE -->
@@ -232,8 +270,14 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
 | `reports/09_vllm_adaptation.md` | vLLM 适配全过程：4 个阻塞 + grounding 根因闭环 |
 | `reports/10_phase5_bench.md` | 阶段 5 冒烟与六档压测（含两处口径修正与交叉验证） |
 | `reports/11_tuning_experiments.md` | 服务级单变量调优实验 E1–E3 |
-| `outputs/` | 原始测量数据（baseline / phase4 / phase5_* / 批量 / A/B） |
-| `scripts/` | 环境检查、最小推理、探针、压测、图像规范化、格式桥、A/B 脚本 |
+| `reports/22_gemm_tuning.md` | GEMM 算子调优专项（shape 采集、选优、算子级对比、库生效验证） |
+| `reports/23_tuning_progress_20261030.md` | graph 基线之后的第一轮调优台账（E5–E9 采纳与否决） |
+| `reports/24_prompt_retune_timing_20261030.md` | 提示词冻结后的精简调优流程与实际耗时 |
+| `reports/25_tuning_delivery_20261031.md` | **最优版交付报告**（最终配置、六档完整压测、对比、组装与生效证据、回退） |
+| `reports/tuning_comparison.md` | 调优对比表（首提基线 / graph 基线 / 最优版，逐档 + 同节点 A/B） |
+| `submission/rocblas_tuned/library_gpu4/` | GEMM 调优库相对 stock 的 6 个差异文件（4 改写 + 2 新增） |
+| `outputs/` | 原始测量数据（baseline / phase4 / phase5_* / 批量 / A/B / fullbench_*） |
+| `scripts/` | 环境检查、最小推理、探针、压测、图像规范化、格式桥、A/B 脚本、完整压测与对比表生成 |
 | `tools/` | 汇总、提交包自检、产物刷新、流水线等辅助工具 |
 | `patches/`、`envs/` | 等价 diff 与隔离依赖/垫片 |
 
@@ -248,9 +292,10 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
    性能对比必须显式标注卡数；并发 64 档受 KV cache（253,312 token）限制，
    实测服务侧真实常驻并发 **50**（4096 档）/ **15**（16384 档，p50=15 / p90=16），
    不是请求的 64，其余排队。详见 `reports/10_phase5_bench.md` §3.6。
-3. **`--enforce-eager` 的代价** —— 见 `reports/11_tuning_experiments.md` §2；
-   非 eager 在 115 GiB cgroup 上限下曾触发 OOM（Pod 重建、节点不可达 5 h），
-   A/B 带内存看门狗执行，结论以实测为准。
+3. **graph 启动的内存风险** —— 见 `reports/11_tuning_experiments.md` §2；
+   非 eager 在 115 GiB cgroup 上限下曾触发 OOM（Pod 重建、节点不可达 5 h）。
+   最优版改用 graph 后，`run.sh` 内置 **70 GiB 内存看门狗**：启动期超阈值即
+   SIGKILL 整个进程组，让失败发生在可控范围内；实测启动稳定（ready_after 170~240 s）。
 4. **厂商 GEMM 算子调优在本节点不具备执行条件** —— 无 `auto_select_tools`、无随包 shape 数据、
    无 `rocprof`；只采到 rocBLAS layer3 trace 作诊断（`reports/11` §4）。
 5. **`platform/` 截图与平台区域/代理地址待用户补** —— 节点访问不到平台控制台。

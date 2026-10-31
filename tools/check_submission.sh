@@ -9,7 +9,7 @@
 # 退出码: 0 = 全部通过；1 = 有 FAIL
 # =============================================================================
 set -uo pipefail
-cd /root/private_data/workspace/robo/submission
+cd "${WS:-/root/private_data/workspace/robo}/submission"
 
 FAIL=0
 WARN=0
@@ -68,8 +68,8 @@ echo
 echo "=== 2. env.sh 关键变量 ==="
 for v in MODEL_ID MODEL_PATH SERVED_NAME IMAGE FRAMEWORK CARD PRECISION PORT \
          TP MAX_LEN MEM_FRAC EXTRA_ARGS WORK_DIR REPO_DIR HF_HOME PYTHONPATH; do
-  if grep -q "^export $v=" env.sh; then
-    val=$(grep "^export $v=" env.sh | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' | tr -d '"' | cut -c1-72)
+  if grep -qE "^[[:space:]]*export $v=" env.sh; then
+    val=$(grep -E "^[[:space:]]*export $v=" env.sh | head -1 | cut -d= -f2- | sed 's/[[:space:]]*#.*$//' | tr -d '"' | cut -c1-72)
     printf '  PASS  %-12s = %s\n' "$v" "$val"
   else
     bad "$v 未在 env.sh 中定义"
@@ -80,7 +80,7 @@ echo
 echo "=== 3. 配置一致性（env.sh vs server.log）==="
 # 取值时必须剥掉行尾注释（env.sh 里这些变量带说明性注释）与首尾空白
 envval() {
-  grep "^export $1=" env.sh | head -1 | cut -d= -f2- \
+  grep -E "^[[:space:]]*export $1=" env.sh | head -1 | cut -d= -f2- \
     | sed 's/[[:space:]]*#.*$//' | tr -d '"' | sed 's/[[:space:]]*$//'
 }
 for pair in MAX_LEN PORT FRAMEWORK CARD PRECISION; do

@@ -3,7 +3,7 @@
   "CARD": "K100-AI",
   "FRAMEWORK": "vllm",
   "PRECISION": "bf16",
-  "generated_at": "2026-10-30T10:25:26",
+  "generated_at": "2026-10-31T21:25:58",
   "status": "BLOCKED",
   "reason": "官方基线文件 baselines/BAAI__RoboBrain2.5-8B-NV.json 未下发；官方评测数据集与判分器同样未下发。按验收标准第 2 节，精度项必须标记为 BLOCKED，不得用自行选择的 demo 或自建 GPU 结果替代官方 98% 验收证据。",
   "internal_metric": {

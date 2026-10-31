@@ -1,0 +1,488 @@
+tune-all: make -C /root/private_data/workspace/robo/tools/auto_select_tools/source-all
+bench-test: make -C /root/private_data/workspace/robo/tools/auto_select_tools/source-test
+
+运行GEMM选优流程
+   硬件类型: ECO
+   调优策略: common
+   运行模式: user
+   GPU 设备: [0]
+
+============================================================
+Step 1. 配置文件转 CSV
+============================================================
+
+[INFO] Copying all files from /opt/dtk/lib/rocblas/library_gpu4 -> /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4
+
+----- 开始将 [custom] 配置文件转为 CSV -----
+TXT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4/GemmGeneralityAdd_SolutionName_Eco.txt
+DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4/GemmGeneralityAdd_Eco.dat
+
+解析 DAT 文件 → TXT，保存到 /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/csv/library_gpu4/custom/GemmGeneralityAdd_Eco.txt
+
+custom_ECO 所有 CSV 将保存到目录: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/csv/library_gpu4/custom
+data_set_num for sb in sgemm (NN): 29156
+data_set_num for mb in sgemm (NN): 28460
+data_set_num for sb in sgemm (NT): 22081
+data_set_num for mb in sgemm (NT): 24362
+data_set_num for sb in sgemm (TN): 32096
+data_set_num for mb in sgemm (TN): 23809
+data_set_num for sb in sgemm (TT): 62
+data_set_num for mb in sgemm (TT): 988
+data_set_num for sb in hpa (NN): 15019
+data_set_num for mb in hpa (NN): 13683
+data_set_num for sb in hpa (NT): 32662
+data_set_num for mb in hpa (NT): 11055
+data_set_num for sb in hpa (TN): 10460
+data_set_num for mb in hpa (TN): 13865
+data_set_num for sb in hpa (TT): 3833
+data_set_num for mb in hpa (TT): 2209
+data_set_num for sb in bf16 (NN): 25812
+data_set_num for mb in bf16 (NN): 5049
+data_set_num for sb in bf16 (NT): 6871
+data_set_num for mb in bf16 (NT): 5842
+data_set_num for sb in bf16 (TN): 25867
+data_set_num for mb in bf16 (TN): 5138
+data_set_num for sb in bf16 (TT): 2067
+data_set_num for mb in bf16 (TT): 4
+data_set_num for sb in int8 (NN): 1980
+data_set_num for mb in int8 (NN): 2
+data_set_num for sb in int8 (NT): 66
+data_set_num for mb in int8 (NT): 1
+data_set_num for sb in int8 (TN): 12
+data_set_num for mb in int8 (TN): 1
+data_set_num for sb in int8 (TT): 1
+data_set_num for mb in int8 (TT): 1
+
+----- 开始将 [infer] 配置文件转为 CSV -----
+TXT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4/GemmGenerality_SolutionName_AI_Eco.txt
+DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4/GemmGenerality_AI_Eco.dat
+
+解析 inference DAT 文件 → TXT，保存到 /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/csv/library_gpu4/infer/GemmGenerality_AI_Eco.txt
+
+inference_ECO 所有 CSV 将保存到目录: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/csv/library_gpu4/infer
+data_set_num for hpa (NN): 377640
+data_set_num for hpa (TN): 365052
+data_set_num for bf16 (NN): 314700
+data_set_num for bf16 (TN): 335680
+data_set_num for int8 (NN): 46156
+int8_TN 为空，跳过生成 CSV
+
+----- 开始将 [general] 配置文件转为 CSV -----
+TXT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4/GemmGenerality_SolutionName_Eco.txt
+DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4/GemmGenerality_Eco.dat
+
+解析 DAT 文件 → TXT，保存到 /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/csv/library_gpu4/general/GemmGenerality_Eco.txt
+
+generality_ECO 所有 CSV 将保存到目录: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/csv/library_gpu4/general
+data_set_num for sb in sgemm (NN): 130000
+data_set_num for mb in sgemm (NN): 60552
+data_set_num for sb in sgemm (NT): 130000
+data_set_num for mb in sgemm (NT): 60552
+data_set_num for sb in sgemm (TN): 130000
+data_set_num for mb in sgemm (TN): 60552
+data_set_num for sb in sgemm (TT): 130000
+data_set_num for mb in sgemm (TT): 60552
+data_set_num for sb in hpa (NN): 130000
+data_set_num for mb in hpa (NN): 60552
+data_set_num for sb in hpa (NT): 130000
+data_set_num for mb in hpa (NT): 60552
+data_set_num for sb in hpa (TN): 130000
+data_set_num for mb in hpa (TN): 60552
+data_set_num for sb in hpa (TT): 130000
+data_set_num for mb in hpa (TT): 60552
+data_set_num for sb in bf16 (NN): 130000
+data_set_num for mb in bf16 (NN): 60552
+data_set_num for sb in bf16 (NT): 130000
+data_set_num for mb in bf16 (NT): 60552
+data_set_num for sb in bf16 (TN): 130000
+data_set_num for mb in bf16 (TN): 60552
+data_set_num for sb in bf16 (TT): 130000
+data_set_num for mb in bf16 (TT): 60552
+data_set_num for sb in int8 (NN): 130000
+data_set_num for mb in int8 (NN): 60552
+data_set_num for sb in int8 (NT): 130000
+data_set_num for mb in int8 (NT): 60552
+data_set_num for sb in int8 (TN): 130000
+data_set_num for mb in int8 (TN): 60552
+data_set_num for sb in int8 (TT): 130000
+data_set_num for mb in int8 (TT): 60552
+
+============================================================
+Step 2. 拆分 Size 文件
+============================================================
+
+/root/private_data/workspace/robo/tools/auto_select_tools/rocblas_layer3_size拆分:  ['fc_size.log']
+
+类型校验完成
+
+拆分size输出路径：
+/root/private_data/workspace/robo/tools/auto_select_tools/rocblas_layer3_size/bf16_NN_supplement.csv
+/root/private_data/workspace/robo/tools/auto_select_tools/rocblas_layer3_size/bf16_TN_inference.csv
+/root/private_data/workspace/robo/tools/auto_select_tools/rocblas_layer3_size/bf16_NN_inference.csv
+/root/private_data/workspace/robo/tools/auto_select_tools/rocblas_layer3_size/bf16_TN_supplement.csv
+
+============================================================
+Step 3. 执行 Kernel 选优
+============================================================
+
+[1/2] 选优类型：user | ECO | bf16 | NN
+
+启动 CustomTuner 选优...
+   开始时间: 2026-10-30 13:16:37
+   [GPU 0] (1/11) 任务 0 完成 (185.6s)
+   [GPU 0] (2/11) 任务 1 完成 (33.1s)
+   [GPU 0] (3/11) 任务 2 完成 (73.1s)
+   [GPU 0] (4/11) 任务 3 完成 (43.7s)
+   [GPU 0] (5/11) 任务 4 完成 (99.6s)
+   [GPU 0] (6/11) 任务 5 完成 (83.1s)
+   [GPU 0] (7/11) 任务 6 完成 (112.0s)
+   [GPU 0] (8/11) 任务 7 完成 (59.9s)
+   [GPU 0] (9/11) 任务 8 完成 (268.4s)
+   [GPU 0] (10/11) 任务 9 完成 (117.4s)
+   [GPU 0] (11/11) 任务 10 完成 (462.1s)
+   ✓ GPU 任务执行完毕
+   结束时间: 2026-10-30 13:42:19
+   耗时: 1542.5 秒
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_0.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_1.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_2.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_3.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_4.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_5.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_6.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_7.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_8.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_9.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/NN/trained/task_10.csv
+写入 JSON: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/json/bf16_NN.json
+写入 CSV: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv/bf16_NN.csv
+   结果输出: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv/bf16_NN.csv
+CustomTuner 选优完成
+
+启动 InferenceTuner 选优...
+   开始时间: 2026-10-30 13:42:20
+   [GPU 0] (1/11) 任务 0 完成 (27.4s)
+   [GPU 0] (2/11) 任务 1 完成 (32.0s)
+   [GPU 0] (3/11) 任务 2 完成 (30.5s)
+   [GPU 0] (4/11) 任务 3 完成 (44.8s)
+   [GPU 0] (5/11) 任务 4 完成 (25.9s)
+   [GPU 0] (6/11) 任务 5 完成 (34.9s)
+   [GPU 0] (7/11) 任务 6 完成 (32.3s)
+   [GPU 0] (8/11) 任务 7 完成 (36.0s)
+   [GPU 0] (9/11) 任务 8 完成 (33.5s)
+   [GPU 0] (10/11) 任务 9 完成 (35.7s)
+   [GPU 0] (11/11) 任务 10 完成 (21.0s)
+   ✓ GPU 任务执行完毕
+   结束时间: 2026-10-30 13:48:18
+   耗时: 357.5 秒
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_0.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_1.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_2.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_3.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_4.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_5.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_6.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_7.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_8.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_9.csv
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/NN/trained/task_10.csv
+写入 JSON: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/json/bf16_NN.json
+写入 CSV: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv/bf16_NN.csv
+   结果输出: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv/bf16_NN.csv
+InferenceTuner 选优完成
+
+[2/2] 选优类型：user | ECO | bf16 | TN
+
+启动 CustomTuner 选优...
+   开始时间: 2026-10-30 13:48:18
+   [GPU 0] (1/1) 任务 0 完成 (37.7s)
+   ✓ GPU 任务执行完毕
+   结束时间: 2026-10-30 13:48:56
+   耗时: 38.1 秒
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/bf16/TN/trained/task_0.csv
+写入 JSON: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/json/bf16_TN.json
+写入 CSV: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv/bf16_TN.csv
+   结果输出: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv/bf16_TN.csv
+CustomTuner 选优完成
+
+启动 InferenceTuner 选优...
+   开始时间: 2026-10-30 13:48:56
+   [GPU 0] (1/1) 任务 0 完成 (146.4s)
+   ✓ GPU 任务执行完毕
+   结束时间: 2026-10-30 13:51:23
+   耗时: 146.8 秒
+处理: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/bf16/TN/trained/task_0.csv
+写入 JSON: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/json/bf16_TN.json
+写入 CSV: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv/bf16_TN.csv
+   结果输出: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv/bf16_TN.csv
+InferenceTuner 选优完成
+
+所有 common 策略的选优完成。
+
+============================================================
+Step 4. 合并选优结果
+============================================================
+
+----- Merge [custom] 配置文件 -----
+
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv/bf16_NN.csv
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv/bf16_TN.csv
+所有合并与去重操作完成
+生成配置: custom - ECO
+data_set_num for sb in sgemm (NN): 29156
+data_set_num for mb in sgemm (NN): 28460
+data_set_num for sb in sgemm (NT): 22081
+data_set_num for mb in sgemm (NT): 24362
+data_set_num for sb in sgemm (TN): 32096
+data_set_num for mb in sgemm (TN): 23809
+data_set_num for sb in sgemm (TT): 62
+data_set_num for mb in sgemm (TT): 988
+[ERROR] 文件 hpa_NN.csv 中 bestkernel 与类型不匹配: 期望 gemm_short='HBH', transpose='Ailk_Bljk', 但发现: ['Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_16_1_WGM6', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG32_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG32_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU4_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU4_SUM3_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x192x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_12_VW4_WG16_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x192x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_12_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT16_8_VW8_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT16_8_VW8_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT16_8_VW8_WG8_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x64_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT256x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_4_VW4_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG32_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x192x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_12_VW4_WG32_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG32_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG32_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG32_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG8_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT4_4_VW4_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM3_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_8_VW4_WG8_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_8_VW4_WG8_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM3_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT384x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT12_8_VW4_WG32_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT384x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT12_8_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_8_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x32x16_SE_GRVW2_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW2_WG8_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_8_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_4_VW4_WG8_8_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_4_VW4_WG8_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x32x64_SE_GRVW4_GSU16_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x32x64_SE_GRVW4_GSU16_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW2_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT2_4_VW2_WG32_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM15', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x64x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_8_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x64x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x64x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG8_8_1_WGM3']
+data_set_num for sb in hpa (NN): 15019
+data_set_num for mb in hpa (NN): 13683
+data_set_num for sb in hpa (NT): 32662
+data_set_num for mb in hpa (NT): 11055
+data_set_num for sb in hpa (TN): 10460
+data_set_num for mb in hpa (TN): 13865
+data_set_num for sb in hpa (TT): 3833
+data_set_num for mb in hpa (TT): 2209
+data_set_num for sb in bf16 (NN): 25921
+data_set_num for mb in bf16 (NN): 5049
+data_set_num for sb in bf16 (NT): 6871
+data_set_num for mb in bf16 (NT): 5842
+data_set_num for sb in bf16 (TN): 25868
+data_set_num for mb in bf16 (TN): 5138
+data_set_num for sb in bf16 (TT): 2067
+data_set_num for mb in bf16 (TT): 4
+data_set_num for sb in int8 (NN): 1980
+data_set_num for mb in int8 (NN): 2
+data_set_num for sb in int8 (NT): 66
+data_set_num for mb in int8 (NT): 1
+data_set_num for sb in int8 (TN): 12
+data_set_num for mb in int8 (TN): 1
+data_set_num for sb in int8 (TT): 1
+data_set_num for mb in int8 (TT): 1
+dataInfo 长度 = 1713184
+前 8 个值: [29156, 0, 1, 1, 1, 1, 1, 1]
+后 8 个值: [0, 1, 2, 416, 704, 32, 256, 1]
+写入 DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4/GemmGeneralityAdd_Eco.dat
+
+----- Merge [infer] 配置文件 -----
+
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv/bf16_NN.csv
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv/bf16_TN.csv
+所有合并与去重操作完成
+生成配置: infer - ECO
+hpa_NN.csv
+[ERROR] 文件 hpa_NN.csv 中 bestkernel 与类型不匹配: 期望 gemm_short='HBH', transpose='Ailk_Bljk', 但发现: ['Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_16_1_WGM1']
+hpa_TN.csv
+bf16_NN.csv
+bf16_TN.csv
+int8_NN.csv
+int8_TN.csv
+int8_TN.csv 不存在.
+dataInfo 长度 = 1451112
+前 8 个值: [377640, 1077, 180, 2098, 128, 7168, 256, 256]
+后 8 个值: [138, 138, 138, 138, 138, 138, -1, 0]
+写入 DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4/GemmGenerality_AI_Eco.dat
+inference 配置文件已成功生成。
+
+============================================================
+Step 5. 性能对比测试
+============================================================
+
+----- 类型: custom | 硬件: ECO | gemm: bf16 | 转置：NN | GPU_id: [0] -----
+
+
+    选优结果路径： /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv
+    测试txt文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/txt
+
+  ➤ 原库进行测试（共2次）
+    旧配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/old/bf16_NN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/old/bf16_NN_round1.csv
+    原库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取原库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/old_kernel/bf16_NN.csv
+
+  ➤ 执行新配置文件测试（使用ROCBLAS_TENSILE_LIBPATH，共2次）
+    新配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/new/bf16_NN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/new/bf16_NN_round1.csv
+    新库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取新库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/new_kernel/bf16_NN.csv
+完成: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/bf16_NN.csv
+
+----- 类型: custom | 硬件: ECO | gemm: bf16 | 转置：TN | GPU_id: [0] -----
+
+
+    选优结果路径： /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/results/csv
+    测试txt文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/txt
+
+  ➤ 原库进行测试（共2次）
+    旧配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/old/bf16_TN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/old/bf16_TN_round1.csv
+    原库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取原库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/old_kernel/bf16_TN.csv
+
+  ➤ 执行新配置文件测试（使用ROCBLAS_TENSILE_LIBPATH，共2次）
+    新配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/new/bf16_TN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/new/bf16_TN_round1.csv
+    新库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取新库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/new_kernel/bf16_TN.csv
+完成: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/bf16_TN.csv
+
+  整合完成
+    整合文件数: 2
+    总记录数: 111
+    输出路径: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_results/merged_results_custom_20261030_135322.csv
+
+----- 类型: infer | 硬件: ECO | gemm: bf16 | 转置：NN | GPU_id: [0] -----
+
+
+    选优结果路径： /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv
+    测试txt文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/txt
+
+  ➤ 原库进行测试（共2次）
+    旧配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/old/bf16_NN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/old/bf16_NN_round1.csv
+    原库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取原库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/old_kernel/bf16_NN.csv
+
+  ➤ 执行新配置文件测试（使用ROCBLAS_TENSILE_LIBPATH，共2次）
+    新配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/new/bf16_NN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/new/bf16_NN_round1.csv
+    新库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取新库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/new_kernel/bf16_NN.csv
+完成: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/bf16_NN.csv
+
+----- 类型: infer | 硬件: ECO | gemm: bf16 | 转置：TN | GPU_id: [0] -----
+
+
+    选优结果路径： /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/results/csv
+    测试txt文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/txt
+
+  ➤ 原库进行测试（共2次）
+    旧配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/old/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/old/bf16_TN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/old/bf16_TN_round1.csv
+    原库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取原库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/old_kernel/bf16_TN.csv
+
+  ➤ 执行新配置文件测试（使用ROCBLAS_TENSILE_LIBPATH，共2次）
+    新配置文件路径：/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4
+    第 1/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/new/bf16_TN_round0.csv
+    第 2/2 轮测试...
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/new/bf16_TN_round1.csv
+    新库测试完成，已保留每个size的最大gflops值
+
+  ➤ 获取新库 kernelName
+    测试结果: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/new_kernel/bf16_TN.csv
+完成: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/bf16_TN.csv
+
+  整合完成
+    整合文件数: 2
+    总记录数: 107
+    输出路径: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_results/merged_results_infer_20261030_135504.csv
+
+============================================================
+Step 6. 生成最终配置
+============================================================
+
+----- Merge [custom] 配置文件 -----
+
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/bf16_NN.csv
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/custom/compare/csv/bf16_TN.csv
+所有合并与去重操作完成
+生成配置: custom - ECO
+data_set_num for sb in sgemm (NN): 29156
+data_set_num for mb in sgemm (NN): 28460
+data_set_num for sb in sgemm (NT): 22081
+data_set_num for mb in sgemm (NT): 24362
+data_set_num for sb in sgemm (TN): 32096
+data_set_num for mb in sgemm (TN): 23809
+data_set_num for sb in sgemm (TT): 62
+data_set_num for mb in sgemm (TT): 988
+[ERROR] 文件 hpa_NN.csv 中 bestkernel 与类型不匹配: 期望 gemm_short='HBH', transpose='Ailk_Bljk', 但发现: ['Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_16_1_WGM6', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG32_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG32_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU4_SUM0_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU4_SUM3_TT8_8_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x192x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_12_VW4_WG16_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x192x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_12_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT16_8_VW8_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT16_8_VW8_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT16_8_VW8_WG8_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT128x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG16_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x256x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG32_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT128x64x64_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT256x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_4_VW4_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG32_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x192x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_12_VW4_WG32_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG32_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_16_VW8_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG32_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT8_8_VW8_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG32_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT256x256x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG32_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG8_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM0_TT4_4_VW4_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU31_SUM3_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_8_VW4_WG8_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_8_VW4_WG8_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT32x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM3_TT4_4_VW4_WG8_32_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT384x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT12_8_VW4_WG32_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT384x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT12_8_VW4_WG32_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_8_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_8_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x128x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_32_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x256x16_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG8_32_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x32x16_SE_GRVW2_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW2_WG8_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_8_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_4_VW4_WG8_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_4_VW4_WG8_8_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x32x32_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_4_VW4_WG8_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x32x64_SE_GRVW4_GSU16_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x32x64_SE_GRVW4_GSU16_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT4_4_VW4_WG16_8_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW2_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT2_4_VW2_WG32_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM1', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM15', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x64x16_SE_GRVW4_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT4_4_VW4_WG16_16_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x64x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_8_1_WGM3', 'Cijk_Alik_Bljk_HBH_MT64x64x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG8_8_1_WGM8', 'Cijk_Alik_Bljk_HBH_MT64x64x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU32_SUM0_TT8_8_VW8_WG8_8_1_WGM3']
+data_set_num for sb in hpa (NN): 15019
+data_set_num for mb in hpa (NN): 13683
+data_set_num for sb in hpa (NT): 32662
+data_set_num for mb in hpa (NT): 11055
+data_set_num for sb in hpa (TN): 10460
+data_set_num for mb in hpa (TN): 13865
+data_set_num for sb in hpa (TT): 3833
+data_set_num for mb in hpa (TT): 2209
+data_set_num for sb in bf16 (NN): 25921
+data_set_num for mb in bf16 (NN): 5049
+data_set_num for sb in bf16 (NT): 6871
+data_set_num for mb in bf16 (NT): 5842
+data_set_num for sb in bf16 (TN): 25868
+data_set_num for mb in bf16 (TN): 5138
+data_set_num for sb in bf16 (TT): 2067
+data_set_num for mb in bf16 (TT): 4
+data_set_num for sb in int8 (NN): 1980
+data_set_num for mb in int8 (NN): 2
+data_set_num for sb in int8 (NT): 66
+data_set_num for mb in int8 (NT): 1
+data_set_num for sb in int8 (TN): 12
+data_set_num for mb in int8 (TN): 1
+data_set_num for sb in int8 (TT): 1
+data_set_num for mb in int8 (TT): 1
+dataInfo 长度 = 1713184
+前 8 个值: [29156, 0, 1, 1, 1, 1, 1, 1]
+后 8 个值: [0, 1, 2, 416, 704, 32, 256, 1]
+写入 DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4/GemmGeneralityAdd_Eco.dat
+
+----- Merge [infer] 配置文件 -----
+
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/bf16_NN.csv
+正在处理同名文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_artifacts/infer/compare/csv/bf16_TN.csv
+所有合并与去重操作完成
+生成配置: infer - ECO
+hpa_NN.csv
+[ERROR] 文件 hpa_NN.csv 中 bestkernel 与类型不匹配: 期望 gemm_short='HBH', transpose='Ailk_Bljk', 但发现: ['Cijk_Alik_Bljk_HBH_MT128x128x32_SE_GRVW8_GSU1_ISA928_MMAC_KME1_NLCA1_SU0_SUM0_TT8_8_VW8_WG16_16_1_WGM1']
+hpa_TN.csv
+bf16_NN.csv
+bf16_TN.csv
+int8_NN.csv
+int8_TN.csv
+int8_TN.csv 不存在.
+dataInfo 长度 = 1451112
+前 8 个值: [377640, 1077, 180, 2098, 128, 7168, 256, 256]
+后 8 个值: [138, 138, 138, 138, 138, 138, -1, 0]
+写入 DAT 文件: /root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4/GemmGenerality_AI_Eco.dat
+inference 配置文件已成功生成。
+
+所有流程执行完毕

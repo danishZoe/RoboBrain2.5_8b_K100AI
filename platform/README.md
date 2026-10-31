@@ -10,6 +10,19 @@
 | `03_model_detail.png` | 模型管理页：模型名称、路径、精度、授权状态 | 同上 |
 | `04_service_mapping.png` | 服务/代理映射页：对外访问地址与端口映射 | 同上 |
 
+## 已补齐：代码托管链接
+
+| 项 | 值 |
+|---|---|
+| 代码仓库（SSH） | `ssh://git@developer.sourcefind.cn:2222/g_exhyd6h6/robobrain2.5_8b_k100ai.git` |
+| 代码仓库（网页） | <https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai> |
+| 分支 / 标签 | `main` = 最优版；`baseline-submission` = 首提基线（eager） |
+| 提交记录 | 见仓库 `git log`，与 `reports/25_tuning_delivery_20261031.md` §7 的 revision 一致 |
+
+> **镜像链接仍待补**：赛事要求代码与**镜像**分别提交到指定托管平台。
+> 镜像名 `jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0` 需要补全
+> 完整地址与 digest；该动作需要平台账号，节点无外网，无法代替上传。
+
 ## 还需要文字补齐的两项
 
 1. **区域**（如 `ksai.scnet.cn` 对应的区域名/区域 ID）

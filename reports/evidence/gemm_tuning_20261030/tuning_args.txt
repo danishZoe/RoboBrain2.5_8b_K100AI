@@ -1,0 +1,31 @@
+###########################
+#      选优参数配置文件    #
+###########################
+
+# -------------------------
+# 基础模式设置
+# -------------------------
+mode=user                      # 可选：user / developer
+source=layer3                  # 数据来源：layer3 / layer4 / csv
+hardware_type=ECO              # 平台类型：ZF / ZF2 / KM / KME / ECO / BW / NMZ
+strategy=common                # 配置生成策略：common / quick # user模式下仅支持common
+gpu_ids=0                      # 可以指定多个GPU编号
+
+# -------------------------
+# 其他设置
+# -------------------------
+should_clean=1                 # 是否删除optimization_configs和optimization_artifacts目录下内容,0表示不删除 # 注意：删除之前请确保备份结果配置文件
+chunk_size=10                  # 每张卡每次选优的size数量，size较少时可按需调整
+tune_warmup_times=2            # 选优预热次数
+tune_loop_times=4              # 选优循环次数
+bench_warmup_times=2           # 测试预热次数
+bench_loop_times=10            # 测试循环次数
+test_times=2                   # 测试轮次
+enable_bestkernel_csv=1        # 是否启用“读取bestkernel CSV + MT校验过滤kernel”，0禁用(默认) / 1启用
+cu_count=0                     # 根据实际环境cu数量设置，用于匹配不同cu的配置文件，0 表示使用无后缀的兜底配置文件
+
+# -------------------------
+# 配置更新设置
+# -------------------------
+update_target_config=0         # 是否将生成的配置文件更新到目标包的配置目录，0表示不更新，1表示更新
+enable_mk_n_threshold=0        # 是否启用MK-N阈值检查（当同一MK组合的N值数量>=30时自动展开），0表示禁用，1表示启用

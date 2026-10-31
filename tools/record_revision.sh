@@ -19,7 +19,7 @@
 # 用法: bash tools/record_revision.sh [--finalize]
 # =============================================================================
 set -uo pipefail
-W=/root/private_data/workspace/robo
+W="${WS:-/root/private_data/workspace/robo}"
 cd "$W" || exit 1
 
 GITDIR="$W/.git"
@@ -62,6 +62,19 @@ submission/logs/
 .env
 *.token
 *.key
+
+# 运行时组装的 rocBLAS 调优库（仓库内只提交 6 个差异文件，运行时装配目录不进仓库）
+/rocblas_tuned/
+
+# 进程崩溃转储（节点上出现过 3 GB 级 core 文件，绝不能进仓库）
+core
+core.*
+
+# 厂商 GEMM 调优工具的工作目录（4 个实例合计 8 GB+，含 Tensile 二进制与旧库副本）。
+# 可复核的关键证据（选优日志、shape 采集、算子级对比 CSV）已固化到
+# reports/evidence/gemm_tuning_20261030/；
+# 生效的候选库差异文件在 submission/rocblas_tuned/library_gpu4/。
+tools/auto_select_tools*/
 EOF
 
 if [ ! -d "$GITDIR" ]; then
@@ -83,7 +96,7 @@ commit_all() {
 }
 
 if [ "$FINALIZE" = "0" ]; then
-  commit_all "RoboBrain2.5-8B-NV on K100AI (K500SM_AI): vLLM 0.15.1 BF16 submission package" || exit 1
+  commit_all "${REV_MSG:-RoboBrain2.5-8B-NV on K100AI (K500SM_AI): vLLM 0.15.1 BF16 submission package}" || exit 1
 
   HASH=$(git -C "$W" rev-parse HEAD)
   SHORT=$(git -C "$W" rev-parse --short HEAD)

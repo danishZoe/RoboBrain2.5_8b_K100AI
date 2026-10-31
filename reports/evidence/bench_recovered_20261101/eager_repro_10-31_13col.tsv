@@ -1,0 +1,6 @@
+file	random_input_len	random_output_len	max_concurrency	completed	failed	duration	request_throughput	output_throughput	total_throughput	mean_ttft_ms	p99_ttft_ms	mean_tpot_ms	p99_tpot_ms	mean_e2e_latency_ms
+round1.jsonl	4096	1024	1	8	0	376.471	0.02125	21.76		1446		44.59		
+round1.jsonl	4096	1024	8	16	0	160.785	0.0995117	101.9		10663.5		68.13		
+round1.jsonl	4096	1024	64	128	0	955.684	0.133936	137.15		119463		311.12		
+round2.jsonl	4096	1024	1	8	0	376.99	0.0212207	21.73		1453.9		44.64		
+round2.jsonl	4096	1024	8	16	0	160.047	0.0999707	102.37		10762.4		67.67		

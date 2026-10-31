@@ -29,7 +29,7 @@ RoboBrain2.5-8B-NV 是基于 **Qwen3-VL** 架构的具身多模态模型，约 8
 
 - 权重：超算互联网 AI 社区模型库（本任务分配路径见第 2 节）
 - 镜像：`jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`
-- 提交仓库：代码仓库 `https://github.com/danishZoe/RoboBrain2.5_8b_K100AI`；托管平台可访问链接【待填】；本次交付代码 revision = `4cded9f3faf1d7cfe7ab29b0aff602620c4babc2`（短 `4cded9f`，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`）
+- 提交仓库：代码仓库 `https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai`（GitLab，SSH 地址 `ssh://git@developer.sourcefind.cn:2222/g_exhyd6h6/robobrain2.5_8b_k100ai.git`）；托管平台可访问链接【待填】；本次交付代码 revision = `4cded9f3faf1d7cfe7ab29b0aff602620c4babc2`（短 `4cded9f`，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`）
 
 参考文档：
 
@@ -51,8 +51,8 @@ RoboBrain2.5-8B-NV 是基于 **Qwen3-VL** 架构的具身多模态模型，约 8
 一键复现：
 
 ```bash
-git clone https://github.com/danishZoe/RoboBrain2.5_8b_K100AI.git \
-  && cd RoboBrain2.5_8b_K100AI
+git clone ssh://git@developer.sourcefind.cn:2222/g_exhyd6h6/robobrain2.5_8b_k100ai.git \
+  && cd robobrain2.5_8b_k100ai
 bash reproduce.sh                          # 一键跑完下面 5 步（等价于逐条执行）
 ```
 
@@ -234,7 +234,67 @@ export PYTHONPATH="$WORK_DIR/envs/vllm_shim:$PYTHONPATH"
 
 # 3) 运行时
 source /opt/dtk/env.sh
+
+# 4) 组装 GEMM 算子调优库到工作目录（幂等；公共 /opt/dtk 库只读不动）
+bash scripts/make_tuned_rocblas_lib.sh
 ```
+
+### 3.5 性能调优方案（最优版）
+
+首提基线是 `--enforce-eager`（eager 模式）。在同卡型、同框架、同负载下做了
+E1–E9 共 9 组单变量实验后，采纳了其中 2 项改动，构成当前提交配置：
+
+| 开关 | 位置 | 作用 |
+| --- | --- | --- |
+| 去掉 `--enforce-eager` | `env.sh` 的 `EXTRA_ARGS` | 启用 torch.compile + graph capture（同节点 4096/并发1 首提 eager 21.75 → graph 基线 22.38 tok/s，+2.9%；单项收益有限，主体收益来自 GEMM 调优库与 aiter FA） |
+| `ROCBLAS_TENSILE_LIBPATH` | `env.sh` → `$WORK_DIR/rocblas_tuned/library_gpu4` | **GEMM 算子调优库**：用厂商 `auto_select_tools` 在本机实测 shape 上重新选优的 Tensile 选优表 |
+| `VLLM_ATTENTION_BACKEND=ROCM_AITER_FA` | `env.sh` | 长上下文 decode 走 aiter FA kernel（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本节点未单独隔离该项） |
+
+#### 3.5.1 GEMM 算子调优库：来源、组装与生效证据
+
+- **来源**：2026-10-30 在本机用厂商 `auto_select_tools` 采集真实业务 shape（rocBLAS layer3
+  trace，218 个唯一 bf16 GEMM size）后做选优，产出与 stock 不同的 Tensile 选优表。
+  算子级对比：107 个 size 中 104 个变快、1 个持平、2 个微降（≤0.2%），中位 **+19.1%**，
+  LM head（并发1 形状）+83%。机制是 decode 形状（N=1~64）由通用 MMAC kernel
+  换成 GEMV 专用 kernel。
+- **与 stock 的确切差异**：只有 4 个文件被改写、2 个新增，其余逐字节相同。
+  这 6 个文件已随仓库提交在 `rocblas_tuned/library_gpu4/`：
+
+  | 文件 | SHA256 | 状态 |
+  | --- | --- | --- |
+  | `GemmGenerality_AI_Eco.dat` | `ad891f317f5c097776e014d738f17e84d2e4af7dfc7ad352f01f0d60d28025f3` | 改写 |
+  | `GemmGeneralityAdd_Eco.dat` | `23e30c02a186d0c9a0cc851c2874752f1fc3f7fdd89ba77bf2cd5c5806324f58` | 改写 |
+  | `GemmGenerality_SolutionName_AI_Eco.txt` | `5509bf83b23f961c17b9a60021a2be070f431835b8920f34cedeac079697b1c3` | 改写 |
+  | `GemmGeneralityAdd_SolutionName_Eco.txt` | `8b5b348f95a93ab7f852a816389cc2e34f48806a96dd02b5a4842c035082ccd9` | 改写 |
+  | `solutionIndex_AI_Eco.txt` | `6ec0a9d84da70e5a2eeb0fa1dffe06c9f70feaf8defdc1d8203d9c09aa2d736c` | 新增 |
+  | `solutionIndexAdd_Eco.txt` | `3639767ab465c78e729e56850ce0ccbe2229d84f1dfaa7bb059bc8c62b43da79` | 新增 |
+
+- **组装**：`scripts/make_tuned_rocblas_lib.sh` 把 stock 库
+  `/opt/dtk/lib/rocblas/library_gpu4` **复制**到工作目录，再覆盖上述 6 个文件，
+  并逐个校验 SHA256；不匹配即退出非零，**不允许带病启动**。
+  公共 `/opt/dtk` 库全程只读、未被修改（stock `GemmGenerality_AI_Eco.dat`
+  哈希仍为 `be0f15afdd77d40cd3f1cdcf400b84842d1b358342e9c59e4b489a22fc4248cf`）。
+- **生效证据**：`ROCBLAS_DEBUG_GENERALITY=1` 实测 kernel 切换
+  （(4096,1,4096) 从 kernel 288 切到 712/GEMVMT256；(4096,1,12288) 与
+  (4096,64,12288) 均切换到新 kernel）；隔离启动的 inotify 记录到候选目录被实际打开
+  `GemmGenerality_AI_Eco.dat`、`GemmGeneralityAdd_Eco.dat` 及对应 SolutionName TXT。
+- **回退**：不设 `ROCBLAS_TENSILE_LIBPATH` 即回到 stock 库（见第 4.3 节）。
+
+#### 3.5.2 被否决的候选（保留失败证据，不进提交配置）
+
+| 实验 | 变量 | 结果 |
+| --- | --- | --- |
+| E6 | `--gpu-memory-utilization` 0.85 → 0.90 | 并发 8 档门槛 -2.8%，**否决** |
+| E8 | `VLLM_ROCM_USE_AITER=1`（aiter 总开关） | 启动期 ViT `mm_encoder_attention` flash op 崩溃，**否决** |
+| E9 | `compile_mm_encoder=true` | 两档均在噪声内（-1.3%），**否决** |
+| E2 | `--max-num-batched-tokens` 8192 / 16384 | 无取值同时满足「吞吐 >3% + TTFT 下降 + 零失败」，回退 4096 |
+
+#### 3.5.3 调优对输出的影响
+
+调优只改**算子实现与执行路径**，不改权重、精度、提示词与采样语义：
+6 个固定样例输出可解析率 6/6，坐标漂移 ≤3/1000（与后端间既有漂移同量级）。
+官方 ≥98% 一致率仍为 `BLOCKED`（缺官方 GPU 参考输出与判分器，见第 6.1 节），
+**不以此宣称精度达标**。
 
 ## 4. 服务启动脚本
 
@@ -253,7 +313,11 @@ export MEM_FRAC=0.85
 export NNODES=1
 export NODE_RANK=0
 export LOAD_TIMEOUT=1800
-export EXTRA_ARGS="--enforce-eager --no-enable-prefix-caching --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt {\"image\": 8}"
+export USE_TUNED=1                      # 1=最优版（graph+调优库+aiter FA）；0=回退 eager 首提基线
+export TUNED_ROCBLAS_DIR="$WORK_DIR/rocblas_tuned/library_gpu4"
+export ROCBLAS_TENSILE_LIBPATH="$TUNED_ROCBLAS_DIR"
+export VLLM_ATTENTION_BACKEND=ROCM_AITER_FA
+export EXTRA_ARGS="--no-enable-prefix-caching --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt={\"image\":8}"
 ```
 
 启动：
@@ -272,13 +336,15 @@ python3 scripts/serve_vllm_patched.py \
   --tensor-parallel-size 1 --pipeline-parallel-size 1 \
   --max-model-len 32768 --gpu-memory-utilization 0.85 \
   --dtype bfloat16 --trust-remote-code \
-  --enforce-eager --no-enable-prefix-caching \
+  --no-enable-prefix-caching \
   --max-num-batched-tokens 4096 --max-num-seqs 64 \
-  --limit-mm-per-prompt '{"image": 8}'
+  --limit-mm-per-prompt '{"image":8}'
 ```
 
 > **与官方 `vllm serve` 的唯一差别**：入口是 `scripts/serve_vllm_patched.py`，
 > 它在启动 vLLM 之前注入 `sitecustomize` 垫片（第 3.3 节），其余参数完全一致。
+> **相对首提基线的差异**：去掉了 `--enforce-eager`（启用 torch.compile + graph capture），
+> 并新增两个环境变量 `ROCBLAS_TENSILE_LIBPATH` / `VLLM_ATTENTION_BACKEND`（见第 3.5 节）。
 
 重点参数说明：
 
@@ -286,29 +352,30 @@ python3 scripts/serve_vllm_patched.py \
 | --- | --- | --- |
 | `--tensor-parallel-size` | `1` | 本 Pod 只分配到 1 张卡；官方脚手架默认 4，**性能对比为单卡口径** |
 | `--max-model-len` | `32768` | 官方 `env.sh` 口径：须覆盖 16K 输入（随机 token 文本重编码后 ~17.3K）+ 视觉 2,042 + 输出 1,024 ≈ 20.3K；实测开到该值**不减少** KV cache（20480 与 32768 下均为 253,312 token） |
-| `--gpu-memory-utilization` | `0.85` | 与官方 `env.sh` 的 `MEM_FRAC` 一致；实测 KV cache = 253,312 token |
-| `--enforce-eager` | 开 | **容器 cgroup 上限 115 GiB**：非 eager 启动会在 inductor 编译期触顶，被 OOM killer 杀掉并导致 Pod 重建（实测记录见第 8 节）。代价是失去编译/graph 加速，本节点无法规避 |
+| `--gpu-memory-utilization` | `0.85` | 与官方 `env.sh` 的 `MEM_FRAC` 一致；实测 KV cache = 253,312 token（eager 基线）/ 276,480 token（0.90 档，未采纳） |
+| `--enforce-eager` | **关**（最优版） | 首提基线因容器 cgroup 上限 115 GiB 而开启 eager（2026-10-27 实测被 OOM killer 杀掉并导致 Pod 重建）。最优版改为启用 graph：启动期由 `run.sh` 的 **70 GiB 内存看门狗**兜底，实测启动稳定（ready_after 170~240 s），收益见第 7 节 |
+| 环境变量 `ROCBLAS_TENSILE_LIBPATH` | `$WORK_DIR/rocblas_tuned/library_gpu4` | **GEMM 算子调优库**（第 3.5 节）。`run.sh` 启动前用 `scripts/make_tuned_rocblas_lib.sh` 把 stock 库复制到该目录并覆盖 6 个差异文件，逐个校验 SHA256；公共 `/opt/dtk` 库保持只读、不被改动 |
+| 环境变量 `VLLM_ATTENTION_BACKEND` | `ROCM_AITER_FA` | 长上下文 decode 走 aiter FA kernel（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本节点未单独隔离该项）。**不要**设 `VLLM_ROCM_USE_AITER=1`：本镜像下会在 ViT `mm_encoder_attention` flash op 崩溃（`reports/23` §2 E8） |
 | `--no-enable-prefix-caching` | 开 | 压测时避免相同 prompt 的 prefill 成本被缓存命中抹掉（实测开启时命中率 64%） |
 | `--limit-mm-per-prompt` | `{"image": 8}` | 保留多图能力（赛事要求「单图/多图均正常」） |
 | `--max-num-batched-tokens` | `4096` | 降低 profiling 与调度峰值 |
 | 环境变量 `PYTHONPATH` | `$WORK_DIR/envs/pylibs` | 客户端图像规范化依赖 `qwen_vl_utils` |
 
-### 4.3 恢复基线服务（回退方法）
+### 4.3 回退方法（回到 eager 首提基线）
 
-调优实验（E1/E2/E3）会**杀掉并重启**服务（用不同端口做单变量 A/B）。
-实验跑完后恢复「首提基线配置」只需一条命令 —— `run.sh` 是幂等的：
+调优实验与压测会**杀掉并重启**服务（用不同端口做单变量 A/B）。
+一键回到「首提基线配置」只需一个环境变量 —— `run.sh` 是幂等的：
 
 ```bash
 cd /root/private_data/workspace/robo/submission
-source ./env.sh
 
 # 1) 停掉任何残留的实验实例（只杀本任务的进程）
 pkill -f "scripts/serve_vllm_patched.py" || true
 pkill -f "VLLM::EngineCore" || true
 sleep 8
 
-# 2) 用首提基线配置重新拉起（eager / 32768 / 30000 / mem-frac 0.85）
-setsid nohup bash run.sh > logs/run_stdout_final.log 2>&1 &
+# 2) 用首提基线配置重新拉起（eager / 32768 / 30000 / mem-frac 0.85 / stock 库）
+USE_TUNED=0 setsid nohup bash run.sh > logs/run_stdout_final.log 2>&1 &
 for i in $(seq 1 90); do
   curl -sf --noproxy '*' "http://127.0.0.1:30000/health" >/dev/null && break
   sleep 10
@@ -318,6 +385,10 @@ done
 grep -m1 '^\[run\]' server.log
 ```
 
+`USE_TUNED=0` 的效果：`env.sh` 不再导出 `ROCBLAS_TENSILE_LIBPATH` /
+`VLLM_ATTENTION_BACKEND`，并把 `--enforce-eager` 加回 `EXTRA_ARGS`
+（见 `env.sh` 末尾的 `ROBO_BASE_ARGS` 分支）。
+
 期望输出（基线配置）：
 
 ```text
@@ -326,6 +397,12 @@ grep -m1 '^\[run\]' server.log
       --dtype bfloat16 --trust-remote-code --gpu-memory-utilization 0.85
       --max-model-len 32768 --enforce-eager --no-enable-prefix-caching
       --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt={"image":8}
+```
+
+只回退其中一项也可以（例如保留 graph 但换回 stock 库）：
+
+```bash
+env -u ROCBLAS_TENSILE_LIBPATH -u VLLM_ATTENTION_BACKEND bash tools/start_bench_service.sh graph 30000
 ```
 
 > Pod 重启 / SSH 断连后的完整恢复流程见 `../reports/00_RUNBOOK.md` §2；
@@ -954,14 +1031,38 @@ python -m sglang.bench_serving \
 
 <!-- BENCH_SUMMARY:BEGIN -->
 | random_input_len | random_output_len | max_concurrency | completed | duration | request_throughput | output_throughput | total_throughput | mean_ttft_ms | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 4096 | 1024 | 1 | 8 | 325.78 | 0.02 | 25.15 | 181.28 | 802.97 | 834.86 | 39.02 | 39.32 | 40720.70 |
-| 4096 | 1024 | 8 | 16 | 113.06 | 0.14 | 144.91 | 1046.99 | 5748.54 | 5810.17 | 49.61 | 50.30 | 56497.34 |
-| 4096 | 1024 | 64 | 128 | 651.67 | 0.20 | 201.13 | 1450.34 | 71638.63 | 322252.82 | 219.93 | 462.72 | 296628.01 |
-| 16384 | 1024 | 1 | 8 | 375.90 | 0.02 | 21.79 | 432.26 | 3648.41 | 3701.71 | 42.36 | 42.76 | 46986.40 |
-| 16384 | 1024 | 8 | 16 | 256.60 | 0.06 | 63.85 | 1267.53 | 13901.87 | 29278.75 | 111.49 | 119.08 | 127953.45 |
-| 16384 | 1024 | 64 | - | - | - | - | - | - | - | - | - | - |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4096 | 1024 | 1 | 8 | 285.07 | 0.03 | 28.74 | 207.23 | 1448.69 | 1630.32 | 33.42 | 33.62 | 35632.50 |
+| 4096 | 1024 | 8 | 16 | 141.29 | 0.11 | 115.96 | 836.86 | 9786.72 | 10444.80 | 59.46 | 66.23 | 70614.40 |
+| 4096 | 1024 | 64 | 128 | 941.54 | 0.14 | 139.21 | — | 114388.36 | — | 309.35 | — | 430852.94 |
+| 16384 | 1024 | 1 | 8 | 426.14 | 0.02 | 19.22 | 381.56 | 6717.82 | 6826.51 | 45.50 | 48.37 | 53266.30 |
+| 16384 | 1024 | 8 | 16 | 363.36 | 0.04 | 45.09 | — | 25831.20 | — | 151.86 | — | 181184.52 |
+| 16384 | 1024 | 64 | 128 | 13667.91 | 0.01 | 9.59 | — | 4134411.49 | 6101802.49 | 1416.31 | — | 5583300.15 |
 <!-- BENCH_SUMMARY:END -->
+
+<!-- TUNING_COMPARISON:BEGIN -->
+### 7.1 与基线的同口径对比
+
+**同节点 A/B（graph 基线 vs 最优版，2026-10-31 同一节点、同一负载）**
+
+| 输入 | 并发 | graph 基线 tok/s | 最优版 tok/s | 吞吐提升 | TTFT 变化 | TPOT 变化 | 基线轮/候选轮 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| 4096 | 1 | 22.38 | 28.73 | +28.36% | -4.2% | -22.7% | 1/2 |
+| 4096 | 8 | 104.84 | 115.66 | +10.32% | -10.0% | -9.2% | 1/2 |
+
+**同节点对比首提基线（eager vs 最优版，2026-10-31 同一节点、同一负载；赛事口径正式对比）**
+
+| 输入 | 并发 | 首提基线 eager（同节点，10-31） tok/s | 最优版 tok/s | 提升 |
+| --- | ---: | ---: | ---: | ---: |
+| 4096 | 1 | 21.75 | 28.73 | +32.11% |
+| 4096 | 8 | 102.14 | 115.66 | +13.24% |
+| 4096 | 64 | 137.15 | 139.79 | +1.92% |
+
+> 首提基线在 **2026-10-27 节点** 的原始六档记录保留在 `bench/round1.jsonl` /
+> `bench/round2.jsonl`（官方口径基准，见第 8 节的节点差异说明）；
+> 最优版的原始数据在 `bench/tuned/`。逐档对比表见 `../reports/tuning_comparison.md`，
+> 完整交付报告见 `../reports/25_tuning_delivery_20261031.md`。
+<!-- TUNING_COMPARISON:END -->
 
 > **读表要点（单卡口径）**
 > - `output_throughput` 是**输出** token 吞吐；`total_throughput` 另含输入 token。
