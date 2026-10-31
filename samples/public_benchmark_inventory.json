@@ -1,0 +1,181 @@
+{
+  "schema": "robo.public-benchmark-inventory.v1",
+  "downloaded_at": "2026-10-27T21:05:24+0800",
+  "note": "上游公开评测集，用于补充精度证据；**非赛事官方验收数据集**，不能替代官方 98% 门槛。",
+  "datasets": [
+    {
+      "repo_id": "nyu-visionx/CV-Bench",
+      "local_dir": "/root/private_data/workspace/robo/third_party/benchmarks/CV-Bench",
+      "status": "ok",
+      "snapshot_path": "/root/private_data/workspace/robo/third_party/benchmarks/CV-Bench",
+      "file_count": 15,
+      "total_bytes": 406709503,
+      "largest_files": [
+        {
+          "path": "test_3d.parquet",
+          "bytes": 219902227
+        },
+        {
+          "path": "test_2d.parquet",
+          "bytes": 184906137
+        },
+        {
+          "path": "test_3d.jsonl",
+          "bytes": 1069448
+        },
+        {
+          "path": "test_2d.jsonl",
+          "bytes": 820585
+        },
+        {
+          "path": "README.md",
+          "bytes": 6136
+        },
+        {
+          "path": ".gitattributes",
+          "bytes": 2307
+        },
+        {
+          "path": "build_img.py",
+          "bytes": 1909
+        },
+        {
+          "path": ".cache/huggingface/download/test_3d.parquet.metadata",
+          "bytes": 125
+        },
+        {
+          "path": ".cache/huggingface/download/test_2d.parquet.metadata",
+          "bytes": 125
+        },
+        {
+          "path": ".cache/huggingface/download/.gitattributes.metadata",
+          "bytes": 101
+        },
+        {
+          "path": ".cache/huggingface/download/build_img.py.metadata",
+          "bytes": 101
+        },
+        {
+          "path": ".cache/huggingface/download/test_3d.jsonl.metadata",
+          "bytes": 101
+        }
+      ]
+    },
+    {
+      "repo_id": "BAAI/RefSpatial-Bench",
+      "local_dir": "/root/private_data/workspace/robo/third_party/benchmarks/RefSpatial-Bench",
+      "status": "ok",
+      "snapshot_path": "/root/private_data/workspace/robo/third_party/benchmarks/RefSpatial-Bench",
+      "file_count": 1131,
+      "total_bytes": 124513099,
+      "largest_files": [
+        {
+          "path": "data/location-00000-of-00001.parquet",
+          "bytes": 18826996
+        },
+        {
+          "path": "data/placement-00000-of-00001.parquet",
+          "bytes": 13107669
+        },
+        {
+          "path": "data/unseen-00000-of-00001.parquet",
+          "bytes": 11201013
+        },
+        {
+          "path": "assets/logo.png",
+          "bytes": 827140
+        },
+        {
+          "path": "Location/image/14.png",
+          "bytes": 745238
+        },
+        {
+          "path": "Placement/image/68.png",
+          "bytes": 675219
+        },
+        {
+          "path": "Placement/image/61.png",
+          "bytes": 671730
+        },
+        {
+          "path": "Placement/image/63.png",
+          "bytes": 655985
+        },
+        {
+          "path": "Unseen/image/47.png",
+          "bytes": 655985
+        },
+        {
+          "path": "Placement/image/66.png",
+          "bytes": 596825
+        },
+        {
+          "path": "Unseen/image/49.png",
+          "bytes": 596825
+        },
+        {
+          "path": "Placement/image/53.png",
+          "bytes": 588547
+        }
+      ]
+    },
+    {
+      "repo_id": "JingkunAn/TraceSpatial-Bench",
+      "local_dir": "/root/private_data/workspace/robo/third_party/benchmarks/TraceSpatial-Bench",
+      "status": "ok",
+      "snapshot_path": "/root/private_data/workspace/robo/third_party/benchmarks/TraceSpatial-Bench",
+      "file_count": 819,
+      "total_bytes": 108638611,
+      "largest_files": [
+        {
+          "path": "data/train-00000-of-00001.parquet",
+          "bytes": 67558403
+        },
+        {
+          "path": "raw_data/6/image.png",
+          "bytes": 350583
+        },
+        {
+          "path": "raw_data/5/image.png",
+          "bytes": 340687
+        },
+        {
+          "path": "raw_data/9/image.png",
+          "bytes": 333080
+        },
+        {
+          "path": "raw_data/44/image.png",
+          "bytes": 317174
+        },
+        {
+          "path": "raw_data/22/image.png",
+          "bytes": 316954
+        },
+        {
+          "path": "raw_data/15/image.png",
+          "bytes": 316624
+        },
+        {
+          "path": "trajectory_dataset.json",
+          "bytes": 313282
+        },
+        {
+          "path": "raw_data/8/image.png",
+          "bytes": 310728
+        },
+        {
+          "path": "raw_data/40/image.png",
+          "bytes": 307722
+        },
+        {
+          "path": "raw_data/7/image.png",
+          "bytes": 307630
+        },
+        {
+          "path": "raw_data/43/image.png",
+          "bytes": 303904
+        }
+      ]
+    }
+  ]
+}

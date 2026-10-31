@@ -1,0 +1,19 @@
+[
+  {"id": "multi_shared_object", "task": "general",
+   "images": ["official_affordance.jpg", "official_pointing.jpg"],
+   "prompt": "Two images are given. What object appears in both images, and how does it differ between them?",
+   "max_new_tokens": 256, "do_sample": false,
+   "expect": "输出应同时引用两张图的内容，且与图中事实相符（两个杯子）"},
+
+  {"id": "multi_scene_compare", "task": "general",
+   "images": ["official_navigation.jpg", "official_grounding.jpg"],
+   "prompt": "Two images are given. Describe the scene in the first image and the scene in the second image respectively.",
+   "max_new_tokens": 256, "do_sample": false,
+   "expect": "第一张是卫生间、第二张是戴红帽的孩子，两段描述应各自正确"},
+
+  {"id": "multi_count_objects", "task": "general",
+   "images": ["official_pointing.jpg", "official_affordance.jpg"],
+   "prompt": "Two images are given. How many cups are visible in each image?",
+   "max_new_tokens": 256, "do_sample": false,
+   "expect": "两张图分别是两个杯子/一个杯子，计数应正确"}
+]

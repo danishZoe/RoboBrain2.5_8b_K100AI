@@ -1,0 +1,32 @@
+Fix vLLM 0.15.1 crashing on multimodal (Qwen3-VL) checkpoints under
+transformers >= 5.x.
+
+vllm/model_executor/models/qwen3.py reads `tie_word_embeddings` from the TEXT
+config. For a multimodal model the text config is a Qwen3VLTextConfig, and
+transformers 5.x keeps that flag on the COMPOSITE config only, so the lookup
+raises
+
+    AttributeError: 'Qwen3VLTextConfig' object has no attribute 'tie_word_embeddings'
+
+and the engine core dies while loading the checkpoint:
+
+    AttributeError: 'Qwen3VLTextConfig' object has no attribute 'tie_word_embeddings'
+    ...
+    RuntimeError: Engine core initialization failed.
+
+Use getattr() so the declared value is still honoured when the attribute does
+exist (e.g. plain Qwen3 text models) and the safe default is used otherwise.
+For RoboBrain2.5-8B-NV the correct value is False: config.json declares
+`tie_word_embeddings: false` at the top level and the checkpoint stores
+`lm_head.weight`, so the LM head must be loaded, not skipped.
+
+--- a/vllm/model_executor/models/qwen3.py
++++ b/vllm/model_executor/models/qwen3.py
+@@ -394,7 +394,7 @@
+     def load_weights(self, weights: Iterable[tuple[str, torch.Tensor]]) -> set[str]:
+         loader = AutoWeightsLoader(
+             self,
+-            skip_prefixes=(["lm_head."] if self.config.tie_word_embeddings else None),
++            skip_prefixes=(["lm_head."] if getattr(self.config, "tie_word_embeddings", False) else None),
+         )
+         return loader.load_weights(weights)

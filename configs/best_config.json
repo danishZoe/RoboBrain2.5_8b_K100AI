@@ -1,0 +1,70 @@
+{
+  "name": "best_transformers_bs4",
+  "backend": "transformers",
+  "description": "第四阶段结论：K100AI（K500SM_AI）上唯一可用的高性能配置。SGLang 在本镜像的 DTK 内核栈下全部后端崩溃（见 reports/06_sglang_compatibility.md），因此吞吐提升改由已验证路径的批处理获得。",
+  "model_path": "/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV",
+  "device_map": "cuda:0",
+  "device": "K500SM_AI (1 x 63.98 GiB)",
+  "dtype": "bfloat16",
+  "attn_implementation": "default (transformers 5.3.0 -> sdpa)",
+  "image_budget": {
+    "max_pixels": 501760,
+    "comment": "640*28*28. Exp C: TTFT -16.9%, spatial outputs unchanged (only the 732x1220 sample is downscaled, 935->537 visual tokens)."
+  },
+  "batching": {
+    "batch_size": 4,
+    "tokenizer_padding_side": "left",
+    "comment": "Exp F: aggregate throughput x2.72 and per-request latency 6.87s -> 2.53s. LEFT padding is mandatory: right padding corrupts batched decoder-only generation."
+  },
+  "sampling": {
+    "do_sample": false,
+    "temperature": 0.7,
+    "max_new_tokens": {
+      "general": 128,
+      "grounding": 64,
+      "pointing": 64,
+      "trajectory": 192
+    }
+  },
+  "samples": "samples/tasks_official.json",
+  "commands": {
+    "single_request": "python3 scripts/robo_infer.py --task pointing --prompt 'the affordance area for holding the cup' --image samples/images/official_affordance.jpg --max-new-tokens 64 --do-sample 0 --plot 1 --out-dir outputs/manual",
+    "batched": "python3 scripts/batch_infer.py --tasks samples/tasks_official.json --image-dir samples/images --batch-size 4 --plot 1 --out-dir outputs/batch_bs4",
+    "measure": "python3 scripts/benchmark_batch.py --batch-sizes 1 2 4 8 --repeat 3 --out-dir outputs/phase4_batch",
+    "regression_check": "python3 scripts/minimal_inference.py --image samples/images/official_affordance.jpg --prompt 'What is shown in this image?' --max-new-tokens 64 --repeat 2 --out-dir outputs/phase2"
+  },
+  "measured": {
+    "aggregate_tok_per_s_bs4": 31.236,
+    "aggregate_tok_per_s_baseline_bs1": 11.501,
+    "throughput_speedup": 2.716,
+    "per_request_seconds_bs4": 2.5292,
+    "per_request_seconds_bs1": 6.869,
+    "ttft_seconds_mean_with_max_pixels_501760": 0.4084,
+    "peak_vram_reserved_gib_bs4": 17.068,
+    "peak_vram_reserved_gib_bs1": 16.545,
+    "model_load_seconds": 62.12
+  },
+  "quality": {
+    "output_format_preserved": "6/6 samples parseable with the official regexes",
+    "spatial_drift_vs_bs1": "<= 10/1000 normalized units (0.3%-1% of the image); targets visually re-verified in outputs/batch_bs4/",
+    "free_form_text": "same content, different wording"
+  },
+  "not_adopted": [
+    {"change": "attn_implementation=flash_attention_2", "reason": "decode 12.1% slower"},
+    {"change": "max_pixels=200704", "reason": "TTFT -37.9% but the grounding bbox changed materially"},
+    {"change": "max_pixels=1003520", "reason": "no effect, threshold never binds on these samples"},
+    {"change": "SGLang serving", "reason": "all attention backends crash in this DTK image"}
+  ],
+  "artifacts": [
+    "outputs/phase3_baseline/baseline_raw.json",
+    "outputs/phase4/attn_fa2.json",
+    "outputs/phase4/pix_1003520.json",
+    "outputs/phase4/pix_501760.json",
+    "outputs/phase4/pix_200704.json",
+    "outputs/phase4_batch/batch_sweep.json",
+    "outputs/phase4_batch/batch_sweep.md",
+    "outputs/batch_bs4/batch_results.json",
+    "reports/04_tuning.md",
+    "reports/06_sglang_compatibility.md"
+  ]
+}
