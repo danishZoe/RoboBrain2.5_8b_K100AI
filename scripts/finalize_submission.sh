@@ -15,25 +15,61 @@ set -uo pipefail
 
 WS="${WS:-/root/private_data/workspace/robo}"
 cd "$WS" || exit 1
+# 让 scripts/bench_set.py 按当前工作目录解析（默认写死的是节点路径）
+export ROBO_WS="$WS"
 
-CAND_DIR="${CAND_DIR:-outputs/fullbench_candidate_20261031_231152}"
+CAND_DIR="${CAND_DIR:-}"
 OUT_TARBALL="${OUT_TARBALL:-tmp/publish_final.tar.gz}"
+CAND_DIR_PINNED=0
+[ -n "$CAND_DIR" ] && CAND_DIR_PINNED=1
 
 step() { echo; echo "=================== $* ==================="; }
 
 step "0/8 环境"
 echo "ws=$WS"
 echo "node_time=$(date -Is)"
-ls -d "$CAND_DIR" 2>/dev/null || { echo "ERROR: 候选压测目录不存在：$CAND_DIR" >&2; exit 1; }
+echo "--- 卡指纹（换卡后同卡判定的依据）---"
+# shellcheck disable=SC1091
+source "$WS/scripts/card_identity.sh" 2>/dev/null || true
+echo "card_id=${CARD_ID:-unknown}"
+echo "card_uid=${CARD_UID:-}"
+echo "card_name=${CARD_NAME:-}"
+echo "card_gfx=${CARD_GFX:-}"
+echo "node_host=${CARD_HOST:-}"
+if [ "$CAND_DIR_PINNED" = "0" ]; then
+  # 按「同一张卡」解析最优版运行目录与所属会话（scripts/bench_set.py）
+  RESOLVED="$(python3 -c "
+import sys
+sys.path.insert(0, '$WS/scripts')
+import bench_set
+label, dirs = bench_set.pick_single('candidate')
+print(label)
+print(str(dirs[0]) if dirs else '')
+" 2>/dev/null || true)"
+  SESSION_LABEL="$(printf '%s\n' "$RESOLVED" | sed -n '1p')"
+  CAND_DIR="$(printf '%s\n' "$RESOLVED" | sed -n '2p')"
+  export BENCH_NODE_LABEL="${SESSION_LABEL:-当前节点（同一张卡）}"
+fi
+echo "session_label=${BENCH_NODE_LABEL:-当前节点（同一张卡）}"
+echo "candidate_run_dir=${CAND_DIR:-（未解析到）}"
+ls -d "$CAND_DIR" 2>/dev/null || { echo "ERROR: 候选压测目录不存在：${CAND_DIR:-（未解析到）}" >&2; exit 1; }
 
-step "1/8 回填压测表（reports/25 §4/§5.2、submission/README §7）"
-python3 scripts/fill_tuning_tables.py --run-dir "$CAND_DIR" || exit 1
+step "1/8 回填压测表（reports/25 §4/§5.2/§5.3、submission/README §7）"
+if [ "$CAND_DIR_PINNED" = "1" ]; then
+  python3 scripts/fill_tuning_tables.py --run-dir "$CAND_DIR" || exit 1
+else
+  python3 scripts/fill_tuning_tables.py || exit 1
+fi
 
 step "2/8 限制表补充实测口径（reports/25 §9）"
 python3 scripts/patch_report25_limits.py || exit 1
 
 step "3/8 按原始数据修正结论数值与归因（reports/25 §1/§2、reports/05_final §4.1、README §3.5、env.sh 注释）"
-python3 scripts/patch_report25_conclusion.py || exit 1
+if [ "$CAND_DIR_PINNED" = "1" ]; then
+  python3 scripts/patch_report25_conclusion.py --run-dir "$CAND_DIR" || exit 1
+else
+  python3 scripts/patch_report25_conclusion.py || exit 1
+fi
 
 step "4/8 归集最优版原始数据到 submission/bench/tuned/ 并重建 MANIFEST"
 bash scripts/collect_tuned_bench_into_submission.sh "$CAND_DIR" || exit 1

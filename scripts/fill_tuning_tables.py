@@ -3,33 +3,39 @@
 
 回填位置：
   reports/25_tuning_delivery_20261031.md
-      <!-- FULL_BENCH_TABLE -->   ← 最优版六档表（官方 13 列）
-      <!-- SAME_NODE_AB -->       ← 同节点 A/B（graph 基线 vs 最优版）
+      <!-- FULL_BENCH_TABLE -->    ← 最优版六档表（官方 13 列）
+      <!-- SAME_NODE_AB -->        ← 同卡 A/B（graph 基线 vs 最优版）
+      <!-- SAME_NODE_AB_EAGER -->  ← 同卡 A/B（首提基线 eager vs 最优版）
   submission/README.md
       <!-- BENCH_SUMMARY:BEGIN --> ... <!-- BENCH_SUMMARY:END -->  ← 换成最优版表
-      并在其后追加「与首提基线对比」小节
+      并在其后追加「与基线对比」小节（<!-- TUNING_COMPARISON -->）
+
+★ 同卡口径（scripts/bench_set.py）
+  容器被平台回收重建后物理卡会更换，跨卡绝对值不可比。本脚本**只把记录了
+  同一 card_id 的运行目录**当作同卡对照；老目录（无 card_id）一律不参与同卡 A/B。
+  没有同卡对照数据时，相应小节写明「未测」，绝不用跨卡数据顶替。
 
 用法：
-    python3 scripts/fill_tuning_tables.py --run-dir outputs/fullbench_candidate_xxx
+    python3 scripts/fill_tuning_tables.py
+    python3 scripts/fill_tuning_tables.py --run-dir outputs/fullbench_candidate_xxx \
+        --baseline-dirs outputs/fullbench_baseline_yyy --first-dirs outputs/fullbench_eager_zzz
 """
 import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
-WS = Path(os.environ.get("ROBO_WS", "/root/private_data/workspace/robo"))
-ORDER = [(4096, 1), (4096, 8), (4096, 64), (16384, 1), (16384, 8), (16384, 64)]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bench_set  # noqa: E402
 
-# graph 基线（stock 库 + graph，默认 attention）在本节点的两个来源：
-#   * noneager_confirm  → 4096/c1、4096/c8（首轮 A/B）
-#   * fullbench_baseline → 16384/c1、16384/c8、4096/c64（候选压测后链式补测）
-BASELINE_1031 = [
-    "outputs/phase5_ab_noneager/noneager_confirm_20261031_222226",
-    "outputs/fullbench_baseline_20261101_043223",
-]
-FIRST_SUBMISSION = "submission/bench"
-FIRST_SUBMISSION_1031 = "logs/clean_repro_full/clean_repro_full_20261031/bench"
+WS = bench_set.WS
+ORDER = bench_set.ORDER
+TIER_NAME = bench_set.TIER_NAME
+
+# 跨卡存档（历史实验，永不参与同卡相减）
+ARCHIVE_FIRST = ["submission/bench/round1.jsonl", "submission/bench/round2.jsonl"]
 
 COLS = [
     "random_input_len", "random_output_len", "max_concurrency", "completed", "duration",
@@ -37,16 +43,23 @@ COLS = [
     "mean_ttft_ms", "p99_ttft_ms", "mean_tpot_ms", "p99_tpot_ms", "mean_e2e_latency_ms",
 ]
 HEADER = ("| random_input_len | random_output_len | max_concurrency | completed | duration | "
-          "request_throughput | output_throughput | total_throughput | mean_ttft_ms | "
-          "p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |")
+          "| request_throughput | output_throughput | total_throughput | mean_ttft_ms | "
+          "| p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |")
 
 
-def load_dir(d: Path):
+def load_dir(d):
+    """读取一个目录下的 *.jsonl，按 (输入长度, 并发) 聚合（同一文件内同档位只取第一次）。"""
     rows = {}
-    if not d.exists():
+    d = Path(d)
+    if not d.is_dir():
         return rows
     for f in sorted(d.glob("*.jsonl")):
-        for line in f.read_text(encoding="utf-8").splitlines():
+        seen = set()
+        try:
+            text = f.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
             if not line.strip():
                 continue
             try:
@@ -54,6 +67,9 @@ def load_dir(d: Path):
             except json.JSONDecodeError:
                 continue
             key = (r.get("random_input_len"), r.get("max_concurrency"))
+            if key in seen:
+                continue
+            seen.add(key)
             rows.setdefault(key, []).append(r)
     return rows
 
@@ -72,8 +88,7 @@ def fmt_val(v):
 
 
 def missing_cells_note(rows):
-    """若某些档位缺少官方 13 列中的字段（节点不可达时可能只有部分指标留存），
-    生成一条明确的缺口说明，避免读者把 '—' 误读成 0。"""
+    """若某些档位缺少官方 13 列中的字段，生成明确的缺口说明，避免把 '—' 误读成 0。"""
     gaps = {}
     for key in ORDER:
         rs = rows.get(key)
@@ -90,10 +105,8 @@ def missing_cells_note(rows):
         "以下档位存在未留存字段：",
         "",
     ]
-    name = {(4096, 1): "4096/并发1", (4096, 8): "4096/并发8", (4096, 64): "4096/并发64",
-            (16384, 1): "16384/并发1", (16384, 8): "16384/并发8", (16384, 64): "16384/并发64"}
     for key, miss in gaps.items():
-        lines.append(f"> - {name.get(key, key)}：{', '.join(miss)}")
+        lines.append(f"> - {TIER_NAME.get(key, key)}：{', '.join(miss)}")
     lines.append(">")
     lines.append("> 原因与影响见 §9；吞吐、TTFT、TPOT、时长、完成数、失败数等核心指标齐全。")
     return lines
@@ -127,43 +140,34 @@ def fmt_rounds(rows):
     return "\n".join(lines)
 
 
-def fmt_ab(base_rows, cand_rows):
-    lines = ["| 输入 | 并发 | graph 基线 tok/s | 最优版 tok/s | 吞吐提升 | TTFT 变化 | TPOT 变化 | 基线轮/候选轮 |",
+def _mean(rs, field):
+    return sum(r.get(field, 0) or 0 for r in rs) / len(rs) if rs else 0.0
+
+
+def fmt_ab(base_rows, cand_rows, base_label, cand_label):
+    lines = [f"| 输入 | 并发 | {base_label} tok/s | {cand_label} tok/s | 吞吐提升 | TTFT 变化 | TPOT 变化 | 基线轮/候选轮 |",
              "| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |"]
     for key in ORDER:
         b, c = base_rows.get(key), cand_rows.get(key)
         if not b or not c:
             continue
-        bt = sum(r.get("output_throughput", 0) for r in b) / len(b)
-        ct = sum(r.get("output_throughput", 0) for r in c) / len(c)
-        btt = sum(r.get("mean_ttft_ms", 0) for r in b) / len(b)
-        ctt = sum(r.get("mean_ttft_ms", 0) for r in c) / len(c)
-        btp = sum(r.get("mean_tpot_ms", 0) for r in b) / len(b)
-        ctp = sum(r.get("mean_tpot_ms", 0) for r in c) / len(c)
+        bt, ct = _mean(b, "output_throughput"), _mean(c, "output_throughput")
+        btt, ctt = _mean(b, "mean_ttft_ms"), _mean(c, "mean_ttft_ms")
+        btp, ctp = _mean(b, "mean_tpot_ms"), _mean(c, "mean_tpot_ms")
+        if bt <= 0 or btt <= 0 or btp <= 0:
+            continue
         lines.append(
             f"| {key[0]} | {key[1]} | {bt:.2f} | {ct:.2f} | {(ct/bt-1)*100:+.2f}% | "
             f"{(ctt/btt-1)*100:+.1f}% | {(ctp/btp-1)*100:+.1f}% | {len(b)}/{len(c)} |")
     return "\n".join(lines)
 
 
-def fmt_vs_first(first_rows, cand_rows, title="首提基线"):
-    lines = [f"| 输入 | 并发 | {title} tok/s | 最优版 tok/s | 提升 |",
-             "| --- | ---: | ---: | ---: | ---: |"]
-    for key in ORDER:
-        b, c = first_rows.get(key), cand_rows.get(key)
-        if not b or not c:
-            continue
-        bt = sum(r.get("output_throughput", 0) for r in b) / len(b)
-        ct = sum(r.get("output_throughput", 0) for r in c) / len(c)
-        lines.append(f"| {key[0]} | {key[1]} | {bt:.2f} | {ct:.2f} | {(ct/bt-1)*100:+.2f}% |")
-    return "\n".join(lines)
+NOT_MEASURED = ("（当前卡上无同卡对照数据，未做同卡 A/B；"
+                "跨卡历史数据见 `reports/tuning_comparison.md` 的存档段）")
 
 
 def replace_marker(text: str, name: str, body: str) -> str:
-    """在成对标记之间替换正文（标记本身保留，脚本可重复执行）。
-
-    只匹配 BEGIN..END 之间的内容，**不会吃掉标记之外的正文**。
-    """
+    """在成对标记之间替换正文（标记本身保留，脚本可重复执行）。"""
     begin = f"<!-- {name}:BEGIN -->"
     end = f"<!-- {name}:END -->"
     if begin not in text or end not in text:
@@ -191,39 +195,75 @@ def replace_cmp(text: str, body: str) -> str:
     return text.replace(anchor, anchor + "\n\n" + block, 1)
 
 
+def resolve_dirs(args):
+    """决定三套配置各用哪个目录。
+
+    规则（scripts/bench_set.py）：
+      * 显式参数优先；
+      * 否则取「同一张卡」上最新的一份；当前卡凑不齐时回退到历史同节点会话，
+        并在表里标注该会话标签；
+      * **绝不跨会话配对**（A 侧和 B 侧必须来自同一张卡/同一段测量窗口）。
+    """
+    card = bench_set.current_card_id()
+
+    if args.run_dir:
+        cand_dir, cand_label = args.run_dir, args.node_label
+    else:
+        cand_label, cand_dirs = bench_set.pick_single("candidate")
+        cand_dir = cand_dirs[0] if cand_dirs else None
+
+    if args.baseline_dirs:
+        base_dirs = [Path(p) for p in args.baseline_dirs.split(",") if p.strip()]
+        base_label = args.node_label
+    else:
+        base_label, base_dirs, _ = bench_set.pick_pair("baseline", "candidate")
+
+    if args.first_dirs:
+        first_dirs = [Path(p) for p in args.first_dirs.split(",") if p.strip()]
+        first_label = args.node_label
+    else:
+        first_label, first_dirs, _ = bench_set.pick_pair("eager", "candidate")
+
+    return cand_dir, cand_label, base_dirs, base_label, first_dirs, first_label, card
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run-dir", type=Path, default=None)
+    ap.add_argument("--run-dir", type=Path, default=None, help="最优版运行目录（默认取同卡最新一份）")
+    ap.add_argument("--baseline-dirs", default="", help="graph 基线目录（逗号分隔；默认取同卡最新一份）")
+    ap.add_argument("--first-dirs", default="", help="首提基线 eager 目录（逗号分隔；默认取同卡最新一份）")
     ap.add_argument("--report", type=Path, default=WS / "reports/25_tuning_delivery_20261031.md")
     ap.add_argument("--readme", type=Path, default=WS / "submission/README.md")
+    ap.add_argument("--node-label", default=os.environ.get("BENCH_NODE_LABEL", "当前节点（同一张卡）"))
     args = ap.parse_args()
 
-    run_dir = args.run_dir
-    if run_dir is None:
-        cands = sorted((WS / "outputs").glob("fullbench_candidate_*"))
-        cands = [c for c in cands if any(c.glob("*.jsonl"))]
-        if not cands:
-            raise SystemExit("ERROR: no fullbench_candidate_* run dir with results")
-        run_dir = cands[-1]
-    print(f"[fill] run dir: {run_dir}")
+    cand_dir, cand_label, base_dirs, base_label, first_dirs, first_label, card = resolve_dirs(args)
+    if cand_dir is None:
+        raise SystemExit("ERROR: 找不到最优版运行目录（同卡或显式 --run-dir）")
+    print(f"[fill] card_id      : {card or '（未知）'}")
+    print(f"[fill] candidate    : {cand_dir}  [{cand_label}]")
+    print(f"[fill] baseline dirs: {[str(d) for d in base_dirs]}  [{base_label}]")
+    print(f"[fill] eager dirs   : {[str(d) for d in first_dirs]}  [{first_label}]")
 
-    cand = load_dir(run_dir)
+    cand = load_dir(cand_dir)
     if not cand:
-        raise SystemExit(f"ERROR: no result rows in {run_dir}")
+        raise SystemExit(f"ERROR: no result rows in {cand_dir}")
     base = {}
-    for d in BASELINE_1031:
-        for k, v in load_dir(WS / d).items():
+    for d in base_dirs:
+        for k, v in load_dir(d).items():
             base.setdefault(k, []).extend(v)
-    first = load_dir(WS / FIRST_SUBMISSION)
-    first31 = load_dir(WS / FIRST_SUBMISSION_1031)
+    first = {}
+    for d in first_dirs:
+        for k, v in load_dir(d).items():
+            first.setdefault(k, []).extend(v)
 
     official = fmt_official(cand)
     rounds = fmt_rounds(cand)
-    ab = fmt_ab(base, cand)
-    vs_first = fmt_vs_first(first31, cand, "首提基线 eager（同节点，10-31）")
+    ab = fmt_ab(base, cand, "graph 基线", "最优版") if base else NOT_MEASURED
+    ab_eager = fmt_ab(first, cand, "首提基线 eager", "最优版") if first else NOT_MEASURED
 
     full_block = "\n".join([
-        "**最优版（提交配置）六档实测结果**（官方 13 列格式，取记录轮）：",
+        f"**最优版（提交配置）六档实测结果**（{cand_label}；官方 13 列格式，取记录轮）：",
         "",
         official,
         "",
@@ -232,17 +272,18 @@ def main():
         "",
         rounds,
         "",
-        "> 原始数据：`outputs/{RUN_DIR}/`（每档 `round*.jsonl` 与同名 `.log`）；",
+        f"> 原始数据：`outputs/{Path(cand_dir).name}/`（每档 `round*.jsonl` 与同名 `.log`）；",
         "> 驱动脚本 `scripts/run_full_bench.sh`，汇总 `scripts/summarize_full_bench.py`。",
-        "> 同一配置在 10-30 节点上的绝对值更高（该节点整体快约 30%），",
-        "> 跨节点绝对值不可直接比较，见 §6 节点差异警告。",
-    ]).replace("{RUN_DIR}", run_dir.name)
+        "> 本次运行的卡指纹见该目录 `run_config.txt` 的 `card_id=`；",
+        "> **跨节点的绝对值不可直接比较**（容器重建会换卡），见 §6 换卡说明。",
+    ])
 
     # --- reports/25 ---
     txt = args.report.read_text(encoding="utf-8")
     sections_before = txt.count("\n## ")
     txt = replace_marker(txt, "FULL_BENCH_TABLE", full_block)
     txt = replace_marker(txt, "SAME_NODE_AB", ab)
+    txt = replace_marker(txt, "SAME_NODE_AB_EAGER", ab_eager)
     sections_after = txt.count("\n## ")
     if sections_after < sections_before:
         raise SystemExit(
@@ -254,30 +295,33 @@ def main():
     # --- submission/README.md ---
     txt = args.readme.read_text(encoding="utf-8")
     txt = replace_block(txt, official)
-    cmp_block = "\n".join([
+    cmp_lines = [
         "### 7.1 与基线的同口径对比",
         "",
-        "**同节点 A/B（graph 基线 vs 最优版，2026-10-31 同一节点、同一负载）**",
+        f"**同卡 A/B：首提基线 eager → 最优版**（{first_label}，同一负载、同一客户端；"
+        "赛事口径的正式对比）",
+        "",
+        ab_eager,
+        "",
+        f"**同卡 A/B：graph 基线 → 最优版**（{base_label}，只开 graph、不带任何调优开关的对照；"
+        "用于把收益拆成「graph」与「调优库 + aiter FA」两部分）",
         "",
         ab,
-        "",
-        "**同节点对比首提基线（eager vs 最优版，2026-10-31 同一节点、同一负载；赛事口径正式对比）**",
-        "",
-        vs_first,
         "",
         "> 首提基线在 **2026-10-27 节点** 的原始六档记录保留在 `bench/round1.jsonl` /",
         "> `bench/round2.jsonl`（官方口径基准，见第 8 节的节点差异说明）；",
         "> 最优版的原始数据在 `bench/tuned/`。逐档对比表见 `../reports/tuning_comparison.md`，",
         "> 完整交付报告见 `../reports/25_tuning_delivery_20261031.md`。",
-    ])
-    txt = replace_cmp(txt, cmp_block)
+        "> 容器重建会换物理卡，跨卡绝对值不可比，上表只含**同一张卡**上的数据。",
+    ]
+    txt = replace_cmp(txt, "\n".join(cmp_lines))
     args.readme.write_text(txt, encoding="utf-8")
     print(f"[fill] updated {args.readme}")
 
-    print("\n=== 同节点 A/B ===")
+    print("\n=== 同卡 A/B：graph 基线 → 最优版 ===")
     print(ab)
-    print("\n=== 相对首提基线 ===")
-    print(vs_first)
+    print("\n=== 同卡 A/B：首提基线 eager → 最优版 ===")
+    print(ab_eager)
 
 
 if __name__ == "__main__":

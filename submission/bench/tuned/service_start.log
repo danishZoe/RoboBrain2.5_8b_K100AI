@@ -1,0 +1,3 @@
+[start] tuned lib=/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4 log=/root/private_data/workspace/robo/logs/serve_graph_aiterfa_20261031-231202.log
+[start] pid=8876
+[start] READY after 230s

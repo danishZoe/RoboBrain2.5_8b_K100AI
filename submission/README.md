@@ -250,6 +250,23 @@ E1–E9 共 9 组单变量实验后，采纳了其中 2 项改动，构成当前
 | `ROCBLAS_TENSILE_LIBPATH` | `env.sh` → `$WORK_DIR/rocblas_tuned/library_gpu4` | **GEMM 算子调优库**：用厂商 `auto_select_tools` 在本机实测 shape 上重新选优的 Tensile 选优表 |
 | `VLLM_ATTENTION_BACKEND=ROCM_AITER_FA` | `env.sh` | 长上下文 decode 走 aiter FA kernel（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本节点未单独隔离该项） |
 
+#### 3.5.0 换卡与「同卡 A/B」口径（2026-11-01 起强制）
+
+SCNet 容器被平台回收重建后**物理卡会更换**（实测同配置跨卡可差约 30%）。
+因此本提交包把「同卡 A/B」写进了工具链，而不是只写在报告里：
+
+| 机制 | 位置 | 作用 |
+|---|---|---|
+| 卡指纹采集 | `../scripts/card_identity.sh` | 取 GPU unique id（取不到则退化为 主机名+boot_id），写进 `outputs/CARD_ID.txt` |
+| 指纹落盘 | `../scripts/run_full_bench.sh` | 每次压测把 `card_id=` 写进 `<run-dir>/run_config.txt` |
+| 同卡判定 | `../scripts/bench_set.py` | 只把 `card_id` 与当前节点一致的目录算作同卡；没有 `card_id` 的老目录**一律只作存档**，绝不混进同卡 A/B |
+| 三套同卡压测 | `../scripts/run_same_card_bench.sh` | 同一张卡上依次跑 eager → graph 基线 → 最优版 |
+
+配套的三套原始数据目录：`bench/tuned/`（最优版）、`bench/same_card_eager/`（首提基线 eager）、
+`bench/same_card_baseline/`（graph 基线）。
+
+> 结论口径：**只有同一张卡上的两个数才能相减。** 跨卡绝对值只作过程存档。
+
 #### 3.5.1 GEMM 算子调优库：来源、组装与生效证据
 
 - **来源**：2026-10-30 在本机用厂商 `auto_select_tools` 采集真实业务 shape（rocBLAS layer3
@@ -1118,19 +1135,25 @@ python -m sglang.bench_serving \
   - SGLang 在本节点不可用：镜像内 `aiter` 残缺构建（13 个符号未定义），
     5 个后端全崩；**无法单独计 SGLang 一件**
   - 多图上限 8 张（`--limit-mm-per-prompt '{"image": 8}'`）
-  - **非 eager（torch.compile + graph capture）在带 70 GiB 内存看门狗时本容器可以启动**
-    （实测 ready 260 s、cgroup 峰值 ~17.75 GiB，远低于 115 GiB 上限），
-    但**不作为提交配置**：实测收益只落在并发 1 档（4096/并发 1 输出吞吐 32.81 vs 25.15 tok/s，+30.5%），
-    官方口径核心的并发 8 档只有 +0.2%（落在同档两轮波动 <2.3% 内）；
-    且非 eager 下输出数值发生变化（与 transformers 基线逐坐标一致率 3/6 → 2/6，
-    最大坐标偏差 7/1000 → 30/1000），而官方 ≥98% 精度门槛因缺官方基线为 `BLOCKED`，
-    **无法验证该变化无害**。详见 `../reports/11_tuning_experiments.md` §2。
+  - **非 eager（torch.compile + graph capture）已作为当前提交配置的一部分**
+    （`env.sh` 的 `USE_TUNED=1`，`EXTRA_ARGS` 不再带 `--enforce-eager`）。
+    实测可启动（ready 260 s、cgroup 峰值 ~17.75 GiB，远低于 115 GiB 上限），
+    `run.sh` 仍保留 70 GiB 内存看门狗作为保护。
+    **已知风险（如实标注）**：非 eager 下输出数值会变化（与 transformers 基线逐坐标一致率
+    3/6 → 2/6，最大坐标偏差 7/1000 → 30/1000），而官方 ≥98% 精度门槛因缺官方基线为
+    `BLOCKED`，**无法验证该变化无害**。详见 `../reports/11_tuning_experiments.md` §2
+    与 `../reports/25_tuning_delivery_20261031.md`。
     （历史上 2026-10-27 01:02 首次无看门狗的尝试曾触顶 115 GiB → OOM killer 杀容器 → Pod 重建，
     所以任何非 eager 尝试都必须带看门狗。）
-  - **不宣称性能优化达标**：验收标准 §8.2 要求「同口径提升 ≥10%」**且**「优化后精度门槛通过」
-    两条同时成立；本节点只满足前者在并发 1 档的一部分，后者因缺官方材料无法满足，
-    因此提交配置保持首提基线。核算见 `../reports/05_final.md` §4.6、
+  - **不宣称精度达标**：验收标准 §8.2 要求「同口径提升 ≥10%」**且**「优化后精度门槛通过」
+    两条同时成立；本节点只满足前者（且只按**同一张卡**的 A/B 计算，见 §3.5.0），
+    后者因缺官方材料为 `BLOCKED`。因此精度一栏保持 `BLOCKED`，
+    **不以性能结果代替精度结论**。核算见 `../reports/05_final.md` §4.6、
     `../reports/08_gap_vs_official_baseline.md` 风险 #13。
+  - **换卡（2026-11-01）**：容器被平台回收重建后**物理卡会更换**，跨卡绝对值不可比
+    （实测同配置跨卡可差约 30%）。本包的压测工具链已把「同一张卡」做成硬约束：
+    每次压测记录 `card_id`，报告只对同卡数据做 A/B，跨卡数据降级为存档。
+    详见 §3.5.0 与 `../reports/25_tuning_delivery_20261031.md` §6。
 - **踩坑与规避**：
   1. `AttributeError: 'Qwen3VLTextConfig' object has no attribute 'tie_word_embeddings'`
      → vLLM 从子 config 读字段，transformers 5.3.0 只在顶层复合 config 保留

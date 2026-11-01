@@ -2,40 +2,41 @@
 """按原始 JSONL 数据重写 reports/25 的结论数值与差异表「依据」列。
 
 背景：
-  reports/25 §1 结论表里残留了两组**跨节点**旧值（+28.5%/+22%、+64%/+25%），
-  与本轮「只用同节点同轮 A/B」的口径冲突；§2 差异表第 1 行还把
-  「graph 基线 → 调优库」的 TPOT 变化（29.4 → 23.4 ms，10-30）误挂在
-  「去掉 --enforce-eager」上。
+  * 容器被平台回收重建后**物理卡会更换**，跨卡绝对值不可比；
+    本脚本只使用**同一张卡**上的三套数据（scripts/bench_set.py 判定），
+    没有同卡对照时如实写「未测」，绝不用跨卡数据顶替。
+  * §2 差异表第 1 行曾把「graph 基线 → 调优库」的 TPOT 变化误挂在
+    「去掉 --enforce-eager」上，这里按实测重写归因。
 
 本脚本只做**可由原始数据复算**的替换：
   * 所有百分比、tok/s、TTFT/TPOT 都从 JSONL 现场读、现场算；
-  * 无法由本节点数据复算的跨节点结论保留原文，并显式标注来源节点；
+  * 无法由本卡数据复算的跨节点结论保留原文，并显式标注来源节点；
   * 幂等：重复执行结果一致。
 
 用法：
     python3 scripts/patch_report25_conclusion.py
+    python3 scripts/patch_report25_conclusion.py --run-dir outputs/fullbench_candidate_xxx \
+        --baseline-dirs outputs/fullbench_baseline_yyy --first-dirs outputs/fullbench_eager_zzz
 """
+import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
-WS = Path(os.environ.get("ROBO_WS", "/root/private_data/workspace/robo"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import bench_set  # noqa: E402
 
-CAND_DIRS = ["outputs/fullbench_candidate_20261031_231152"]
-GRAPH_BASE_FILES = [
-    "outputs/phase5_ab_noneager/noneager_confirm_20261031_222226/ab_4096_c1.jsonl",
-    "outputs/phase5_ab_noneager/noneager_confirm_20261031_222226/ab_4096_c8.jsonl",
-]
-GRAPH_BASE_DIRS = ["outputs/fullbench_baseline_20261101_043223"]
-EAGER_FIRST_FILES = [
-    "logs/clean_repro_full/clean_repro_full_20261031/bench/round1.jsonl",
-    "logs/clean_repro_full/clean_repro_full_20261031/bench/round2.jsonl",
-]
+WS = bench_set.WS
+ORDER = bench_set.ORDER
+TIER_NAME = bench_set.TIER_NAME
 
-ORDER = [(4096, 1), (4096, 8), (4096, 64), (16384, 1), (16384, 8), (16384, 64)]
-TIER_NAME = {(4096, 1): "4096/并发1", (4096, 8): "4096/并发8", (4096, 64): "4096/并发64",
-             (16384, 1): "16384/并发1", (16384, 8): "16384/并发8", (16384, 64): "16384/并发64"}
+# 跨卡存档（历史实验，永不参与同卡相减）
+ARCHIVE_FIRST = ["submission/bench/round1.jsonl", "submission/bench/round2.jsonl"]
+ARCHIVE_GRAPH30 = ["tmp/graph_bench/baseline_oldlib/round1.jsonl",
+                    "tmp/graph_bench/baseline_oldlib/round2.jsonl"]
+ARCHIVE_E7 = ["tmp/gate_aiterfa.jsonl"]
 
 
 def load(paths):
@@ -46,14 +47,14 @@ def load(paths):
             files = sorted(WS.glob(rel))
         else:
             p = WS / rel
-            if p.is_dir():
-                # 目录：取其下的 *.jsonl
-                files = sorted(p.glob("*.jsonl"))
-            else:
-                files = [p] if p.exists() else []
+            files = sorted(p.glob("*.jsonl")) if p.is_dir() else ([p] if p.exists() else [])
         for f in files:
             seen = set()
-            for line in f.read_text(encoding="utf-8").splitlines():
+            try:
+                text = f.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            for line in text.splitlines():
                 if not line.strip():
                     continue
                 try:
@@ -109,28 +110,62 @@ def replace_row(text: str, prefix_regex: str, new_row: str, label: str) -> str:
 
 
 def main():
-    cand = load(CAND_DIRS)
-    gbase = load(GRAPH_BASE_FILES + GRAPH_BASE_DIRS)
-    eager = load(EAGER_FIRST_FILES)
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--run-dir", type=Path, default=None, help="最优版运行目录（默认取同卡最新一份）")
+    ap.add_argument("--baseline-dirs", default="", help="graph 基线目录（逗号分隔）")
+    ap.add_argument("--first-dirs", default="", help="首提基线 eager 目录（逗号分隔）")
+    ap.add_argument("--node-label", default=os.environ.get("BENCH_NODE_LABEL", "当前节点（同一张卡）"))
+    args = ap.parse_args()
+
+    card = bench_set.current_card_id()
+
+    if args.run_dir:
+        cand_dir, cand_label = args.run_dir, args.node_label
+    else:
+        cand_label, cand_dirs = bench_set.pick_single("candidate")
+        cand_dir = cand_dirs[0] if cand_dirs else None
+
+    if args.baseline_dirs:
+        base_dirs = [Path(p) for p in args.baseline_dirs.split(",") if p.strip()]
+        base_label = args.node_label
+    else:
+        base_label, base_dirs, _ = bench_set.pick_pair("baseline", "candidate")
+
+    if args.first_dirs:
+        first_dirs = [Path(p) for p in args.first_dirs.split(",") if p.strip()]
+        first_label = args.node_label
+    else:
+        first_label, first_dirs, _ = bench_set.pick_pair("eager", "candidate")
+
+    if cand_dir is None:
+        raise SystemExit("ERROR: 找不到最优版运行目录（同卡或显式 --run-dir）")
+
+    cand = bench_set.load_rows(cand_dir)
+    gbase = bench_set.load_dirs(base_dirs)
+    eager = bench_set.load_dirs(first_dirs)
+
+    print(f"[patch] card_id       : {card or '（未知）'}")
+    print(f"[patch] candidate     : {cand_dir}  [{cand_label}]")
+    print(f"[patch] baseline dirs : {[str(d) for d in base_dirs]}  [{base_label}]")
+    print(f"[patch] eager dirs    : {[str(d) for d in first_dirs]}  [{first_label}]")
+
     if not cand:
         raise SystemExit("ERROR: 候选压测数据缺失")
     if not gbase:
-        raise SystemExit("ERROR: graph 基线数据缺失")
+        print("[patch] WARN: 当前卡上没有同卡 graph 基线数据，§2 归因只能给部分结论")
     if not eager:
-        raise SystemExit("ERROR: 首提基线复现数据缺失")
+        print("[patch] WARN: 当前卡上没有同卡首提基线数据，§1 赛事口径对比行将标注未测")
 
     d_graph = deltas(gbase, cand)
     d_eager = deltas(eager, cand)
-    if not d_graph:
-        raise SystemExit("ERROR: graph 基线与候选无共同档位")
 
     tiers_g = [t for t in ORDER if t in d_graph]
     tiers_e = [t for t in ORDER if t in d_eager]
 
-    print("=== graph 基线 → 最优版（同节点） ===")
+    print("=== 同卡 graph 基线 → 最优版 ===")
     for t in tiers_g:
         print(f"  {TIER_NAME[t]}: {d_graph[t][0]:.2f} → {d_graph[t][1]:.2f} tok/s  {d_graph[t][2]}")
-    print("=== 首提基线 eager → 最优版（同节点） ===")
+    print("=== 同卡 首提基线 eager → 最优版 ===")
     for t in tiers_e:
         print(f"  {TIER_NAME[t]}: {d_eager[t][0]:.2f} → {d_eager[t][1]:.2f} tok/s  {d_eager[t][2]}")
 
@@ -138,10 +173,16 @@ def main():
     rp = WS / "reports/25_tuning_delivery_20261031.md"
     txt = rp.read_text(encoding="utf-8")
 
-    row_graph = (f"| 相对 graph 基线 | {pick(d_graph, tiers_g)}"
-                 f"（2026-10-31 同节点同轮实测，见 §5.2） |")
-    row_eager = (f"| 相对首提 eager 基线 | {pick(d_eager, tiers_e)}"
-                 f"（2026-10-31 同节点同轮实测，赛事口径正式对比，见 §5.2） |")
+    if tiers_g:
+        row_graph = (f"| 相对 graph 基线 | {pick(d_graph, tiers_g)}"
+                     f"（{base_label}，同卡同轮实测，见 §5.2） |")
+    else:
+        row_graph = "| 相对 graph 基线 | **未测**（当前卡上没有同卡 graph 基线数据） |"
+    if tiers_e:
+        row_eager = (f"| 相对首提 eager 基线 | {pick(d_eager, tiers_e)}"
+                     f"（{first_label}，同卡同轮实测，赛事口径正式对比，见 §5.3） |")
+    else:
+        row_eager = "| 相对首提 eager 基线 | **未测**（当前卡上没有同卡 eager 基线数据） |"
     txt = replace_row(txt, r"^\| 相对 graph 基线 \|.*$", row_graph, "§1 graph 基线行")
     txt = replace_row(txt, r"^\| 相对首提 eager 基线 \|.*$", row_eager, "§1 首提基线行")
 
@@ -149,29 +190,31 @@ def main():
     g41 = d_graph.get((4096, 1))
     e41 = d_eager.get((4096, 1))
     g48 = d_graph.get((4096, 8))
-    e48 = d_eager.get((4096, 8))
 
     if e41 and g41:
-        # g41 = (graph 基线吞吐, 最优版吞吐, 提升%)；e41 = (eager 基线吞吐, 最优版吞吐, 提升%)
         eff = (g41[0] / e41[0] - 1) * 100
-        c1_basis = (f"graph（torch.compile + graph capture）：同节点 4096/并发1 "
+        c1_basis = (f"graph（torch.compile + graph capture）：同卡 4096/并发1 "
                     f"首提 eager {e41[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s（{eff:+.1f}%），"
                     f"单项收益有限；叠加调优库与 aiter FA 后到 {g41[1]:.2f} tok/s，"
                     f"主体收益来自第 2、3 项")
+    elif g41:
+        c1_basis = (f"graph（torch.compile + graph capture）：同卡 4096/并发1 "
+                    f"graph 基线 {g41[0]:.2f} → 最优版 {g41[1]:.2f} tok/s（{g41[2]}）；"
+                    f"同卡 eager 基线未测，graph 自身收益未能单独隔离")
     else:
-        c1_basis = "graph（torch.compile + graph capture），收益见 §5.2 同节点 A/B"
+        c1_basis = "graph（torch.compile + graph capture），收益见 §5.2 同卡 A/B"
 
     if g41:
         c2_basis = (f"decode 形状 N=1~64 的 GEMM 换成 GEMV 专用 kernel"
                     f"（算子级 107 size 中位 +19.1%；10-30 单独隔离 E5：4096/并发1 +23.8%）；"
-                    f"同节点 graph 基线 → 最优版 4096/并发1 {g41[2]}、"
+                    f"同卡 graph 基线 → 最优版 4096/并发1 {g41[2]}、"
                     + (f"4096/并发8 {g48[2]}" if g48 else "4096/并发8 —"))
     else:
         c2_basis = "GEMV 专用 kernel，算子级 107 size 中位 +19.1%"
 
     c3_basis = ("16384 长上下文 decode 走 aiter FA kernel"
                 "（10-30 同轮 E7 gate：16384/并发1 +17.9%，TPOT 34.66 → 28.85 ms）；"
-                "本节点未单独隔离此项，未计入上表")
+                "该数值来自 **10-30 节点**，与本卡数据不同卡，未计入上表")
 
     txt = replace_row(
         txt, r"^\| 1 \| 去掉 `--enforce-eager` \|.*$",
@@ -191,9 +234,12 @@ def main():
     txt = sp.read_text(encoding="utf-8")
     if e41 and g41:
         eff = (g41[0] / e41[0] - 1) * 100
-        readme_c1 = (f"启用 torch.compile + graph capture（同节点 4096/并发1 "
+        readme_c1 = (f"启用 torch.compile + graph capture（同卡 4096/并发1 "
                      f"首提 eager {e41[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s，{eff:+.1f}%；"
                      f"单项收益有限，主体收益来自 GEMM 调优库与 aiter FA）")
+    elif g41:
+        readme_c1 = (f"启用 torch.compile + graph capture（同卡 4096/并发1 "
+                     f"graph 基线 {g41[0]:.2f} → 最优版 {g41[1]:.2f} tok/s，{g41[2]}）")
     else:
         readme_c1 = "启用 torch.compile + graph capture（收益见 ../reports/25 §5.2）"
     txt = replace_row(
@@ -203,7 +249,7 @@ def main():
     # 跨节点的 +17.9%（aiter FA）必须标明来源节点，避免被当成本节点实测
     txt = txt.replace(
         "（16384 输入档 +17.9%）",
-        "（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本节点未单独隔离该项）")
+        "（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本卡未单独隔离该项）")
     sp.write_text(txt, encoding="utf-8")
     print(f"[patch] updated {sp}")
 
@@ -214,7 +260,7 @@ def main():
         eff = (g41[0] / e41[0] - 1) * 100
         env_comment = (f"# 最优版**不再**带 --enforce-eager：启用 torch.compile + graph capture 后，\n"
                        f"# 4096/并发1 输出吞吐 首提 eager {e41[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s"
-                       f"（{eff:+.1f}%，同节点实测）。\n"
+                       f"（{eff:+.1f}%，同卡实测）。\n"
                        f"# 单看 graph 的收益有限，主体收益来自 GEMM 调优库与 aiter FA（见 reports/25 §2）。")
         txt = re.sub(r"# 最优版\*\*不再\*\*带 --enforce-eager：.*?# 作为保护。",
                      env_comment.replace("\\", "\\\\") + "\n# 2026-10-27 首次非 eager 启动曾在 inductor 编译期触顶容器 cgroup 上限被 OOM killer\n"
@@ -223,13 +269,11 @@ def main():
         # 跨节点的 +17.9%（aiter FA）标明来源节点
         txt = txt.replace(
             "（16384 输入档 +17.9%）",
-            "（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本节点未单独隔离该项）")
+            "（10-30 同轮 E7 gate 隔离测得：16384/并发1 +17.9%；本卡未单独隔离该项）")
         ep.write_text(txt, encoding="utf-8")
         print(f"[patch] updated {ep}")
 
     # ------------------------------------------------- reports/05_final.md §4.1
-    # 提交配置已切换为最优版，最终报告的「提交口径压测表」应展示最优版，
-    # 首提基线表保留在下方并明确标注。
     fp = WS / "reports/05_final.md"
     ftxt = fp.read_text(encoding="utf-8")
 
@@ -239,27 +283,39 @@ def main():
         "",
         official_table(cand),
         "",
-        "> 原始数据 `outputs/fullbench_candidate_20261031_231152/`，"
+        f"> 原始数据 `outputs/{Path(cand_dir).name}/`，"
         "对比与逐轮波动见 `reports/25_tuning_delivery_20261031.md` §4 与 `reports/tuning_comparison.md`。",
         "<!-- BEST_BENCH_TABLE:END -->",
     ])
-    # §4.1 的口径段原本写的是首提基线（带 --enforce-eager），与「最优版在上」矛盾。
-    # 这里把「口径段起点 → FINAL_BENCH_TABLE 锚点」整段替换为确定内容，
-    # 因此无论跑多少次结果都一致（幂等）。
+
+    eager_block = "\n".join([
+        "<!-- SAME_CARD_EAGER_TABLE:BEGIN -->",
+        "**首提基线 eager（同一张卡，赛事「首次提交」口径）六档实测**",
+        "",
+        official_table(eager) if eager else "（当前卡上没有同卡 eager 基线数据，未测）",
+        "",
+        (f"> 原始数据 `outputs/{Path(first_dirs[0]).name}/`；"
+         f"与最优版的同卡对比见 `reports/tuning_comparison.md` §2.1。")
+        if first_dirs else "> 未测：当前卡上没有同卡 eager 基线数据。",
+        "<!-- SAME_CARD_EAGER_TABLE:END -->",
+    ])
+
     new_kj = ("口径（**最优版 = 当前提交配置**：graph 非 eager + GEMM 调优库 + `ROCM_AITER_FA`）：\n"
               "单卡 K100AI / vLLM 0.15.1 / BF16 / `--max-model-len 32768` /\n"
               "`--gpu-memory-utilization 0.85` / `--max-num-batched-tokens 4096` / `--max-num-seqs 64` /\n"
               "`--no-enable-prefix-caching`；客户端为官方指定的 `sglang.bench_serving`，\n"
-              "每请求 1 张 1080p 图，`--seed 1`，请求数 `max(8, 2×并发)`，输出实际打满 1024 token。")
-    baseline_head = ("**首提基线（eager，冻结基准）同口径原始结果**"
-                     "（口径同上，仅多 `--enforce-eager`、stock rocBLAS 库、默认 attention）：")
+              "每请求 1 张 1080p 图，`--seed 1`，请求数 `max(8, 2×并发)`，输出实际打满 1024 token。\n"
+              "**以下「最优版」与「首提基线 eager」两张表来自同一张物理卡**（容器重建会换卡，"
+              "跨卡绝对值不可比，见 `reports/25_tuning_delivery_20261031.md` §6）。")
+    baseline_head = ("**首提基线（eager，冻结基准，2026-10-27 节点）同口径原始结果**"
+                     "（跨卡存档，仅作历史参考；口径同上，仅多 `--enforce-eager`、stock rocBLAS 库、默认 attention）：")
 
     m = re.search(r"(?m)^口径(?:：单卡 K100AI|（\*\*最优版)", ftxt)
     anchor = "<!-- FINAL_BENCH_TABLE -->"
     if not m or anchor not in ftxt:
         raise SystemExit("ERROR: reports/05_final.md 找不到 §4.1 口径段或 FINAL_BENCH_TABLE 锚点")
     a = ftxt.index(anchor)
-    canonical = new_kj + "\n\n" + best_block + "\n\n" + baseline_head + "\n\n"
+    canonical = new_kj + "\n\n" + best_block + "\n\n" + eager_block + "\n\n" + baseline_head + "\n\n"
     ftxt = ftxt[:m.start()] + canonical + ftxt[a:]
     fp.write_text(ftxt, encoding="utf-8")
     print(f"[patch] updated {fp}")
@@ -270,8 +326,8 @@ def official_table(cand_rows):
             "request_throughput", "output_throughput", "total_throughput",
             "mean_ttft_ms", "p99_ttft_ms", "mean_tpot_ms", "p99_tpot_ms", "mean_e2e_latency_ms"]
     header = ("| random_input_len | random_output_len | max_concurrency | completed | duration | "
-              "request_throughput | output_throughput | total_throughput | mean_ttft_ms | "
-              "p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |")
+              "| request_throughput | output_throughput | total_throughput | mean_ttft_ms | "
+              "| p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |")
     lines = [header, "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
     for key in ORDER:
         rs = cand_rows.get(key)

@@ -13,11 +13,22 @@
 #   请求数 = max(8, 2×并发)
 #
 # 配置：
-#   candidate = graph + GEMM 调优库(ROCBLAS_TENSILE_LIBPATH) + ROCM_AITER_FA
-#   baseline  = graph + stock rocBLAS 库（graph 基线，不加任何调优开关）
+#   eager     = 首提基线：--enforce-eager + stock 库 + 默认 attention（赛事「首次提交」口径）
+#   baseline  = graph 基线：非 eager + stock 库 + 默认 attention（= 首提基线之上只开 graph）
+#   graph     = baseline 的别名
+#   candidate = 最优版：非 eager + GEMM 调优库(ROCBLAS_TENSILE_LIBPATH) + ROCM_AITER_FA
+#
+# ★ 三种配置必须在**同一张卡、同一节点**上测量。容器重建/换卡后，旧的绝对值
+#   与新的不可比，必须在同一张新卡上重跑 eager / baseline / candidate 三套，
+#   收益结论只用同卡同轮 A/B。
+#   为此每次运行都会把**卡指纹**（scripts/card_identity.sh）写进 run_config.txt，
+#   报告脚本（scripts/bench_set.py）据此把「同一张卡」与「跨卡存档」分开，
+#   没有 card_id 的老目录一律只当存档，不会被算进同卡 A/B。
+# ★ 输出目录：outputs/fullbench_<config>_<时间戳>/，报告脚本按 config 取最新一份。
 #
 # 用法：
 #   bash scripts/run_full_bench.sh --config candidate --tiers "4096:1:2,4096:8:2" --rounds 2
+#   bash scripts/run_full_bench.sh --config eager --tiers "4096:1:2,4096:8:2"
 #   tiers 语法 = 输入长度:并发:轮数（轮数省略时取 --rounds）
 # =============================================================================
 set -uo pipefail
@@ -47,6 +58,11 @@ RUN_ID="fullbench_${CONFIG}_$(date +%Y%m%d_%H%M%S)"
 OUT="$WS/outputs/$RUN_ID"
 mkdir -p "$OUT"
 
+# --- 卡指纹（换卡后同卡校验的依据）--------------------------------------------
+# shellcheck disable=SC1091
+source "$WS/scripts/card_identity.sh" 2>/dev/null || true
+echo "card_id=${CARD_ID:-unknown} card_uid=${CARD_UID:-} card_name=${CARD_NAME:-} card_gfx=${CARD_GFX:-}"
+
 # --- DTK 运行时（必须先加载：压测客户端要 import torch，缺 libgalaxyhip 会 ImportError) ---
 # /opt/dtk/env.sh 引用了未定义变量，不能在 set -u 下 source
 set +u
@@ -65,6 +81,7 @@ export HF_HUB_OFFLINE=1
 export TRANSFORMERS_OFFLINE=1
 export PYTHONPATH="$WS/envs/pylibs:${PYTHONPATH:-}"
 export VLLM_LOGGING_LEVEL=WARNING
+export ROBO_WS="$WS"
 
 echo "=== 完整压测 ${RUN_ID} ==="
 echo "config=${CONFIG} tiers=${TIERS} rounds=${ROUNDS} port=${PORT}"
@@ -86,28 +103,47 @@ fi
   echo "config=${CONFIG}"
   echo "port=${PORT}"
   echo "started_at=$(date -Is)"
+  echo "card_id=${CARD_ID:-unknown}"
+  echo "card_uid=${CARD_UID:-}"
+  echo "card_name=${CARD_NAME:-}"
+  echo "card_gfx=${CARD_GFX:-}"
+  echo "node_host=${CARD_HOST:-}"
+  echo "boot_id=${CARD_BOOT_ID:-}"
   echo "tiers=${TIERS}"
   echo "rounds=${ROUNDS}"
   echo "model=${MODEL_PATH}"
   echo "git_revision=$(git -C "$WS" rev-parse HEAD 2>/dev/null)"
   echo "vllm_version=$(python3 -c 'import vllm;print(vllm.__version__)' 2>/dev/null)"
   echo "rocblas_stock_ai_dat=$(sha256sum /opt/dtk/lib/rocblas/library_gpu4/GemmGenerality_AI_Eco.dat 2>/dev/null | cut -d' ' -f1)"
-  echo "candidate_ai_dat=$(sha256sum "$WS/tools/auto_select_tools/optimization_configs/new/config/library_gpu4/GemmGenerality_AI_Eco.dat" 2>/dev/null | cut -d' ' -f1)"
-  echo "candidate_add_dat=$(sha256sum "$WS/tools/auto_select_tools/optimization_configs/new/config/library_gpu4/GemmGeneralityAdd_Eco.dat" 2>/dev/null | cut -d' ' -f1)"
+  # 生效的调优库路径（candidate 用组装出来的 $WS/rocblas_tuned/library_gpu4）
+  TUNED_LIB="${TUNED_ROCBLAS_DIR:-$WS/rocblas_tuned/library_gpu4}"
+  [ -d "$TUNED_LIB" ] || TUNED_LIB="$WS/tools/auto_select_tools/optimization_configs/new/config/library_gpu4"
+  echo "tuned_libpath=$TUNED_LIB"
+  echo "candidate_ai_dat=$(sha256sum "$TUNED_LIB/GemmGenerality_AI_Eco.dat" 2>/dev/null | cut -d' ' -f1)"
+  echo "candidate_add_dat=$(sha256sum "$TUNED_LIB/GemmGeneralityAdd_Eco.dat" 2>/dev/null | cut -d' ' -f1)"
 } > "$OUT/run_config.txt"
 
 # --- 启动服务 ------------------------------------------------------------------
+# 三种配置，必须在**同一张卡、同一节点**上跑，跨卡不可比：
+#   eager     = 首提基线（--enforce-eager + stock 库 + 默认 attention）——赛事「首次提交」口径
+#   baseline  = graph 基线（非 eager + stock 库 + 默认 attention）——只开了 graph，用于归因
+#   candidate = 最优版（非 eager + GEMM 调优库 + ROCM_AITER_FA）——当前提交配置
 case "$CONFIG" in
   candidate)
     # GEMM 调优库 + ROCM_AITER_FA + graph（不加 --enforce-eager）
-    bash "$WS/scripts/start_aiterfa_service.sh" 2>&1 | tee "$OUT/service_start.log"
+    # 调优库路径由 start_aiterfa_service.sh 自己解析并校验（组装目录优先）
+    bash "$WS/scripts/start_aiterfa_service.sh" "$PORT" 2>&1 | tee "$OUT/service_start.log"
     ;;
-  baseline)
+  baseline|graph)
     # graph 基线：stock rocBLAS 库，无任何调优开关
     bash "$WS/tools/start_bench_service.sh" graph "$PORT" 2>&1 | tee "$OUT/service_start.log"
     ;;
+  eager)
+    # 首提基线：--enforce-eager + stock 库 + 默认 attention（与首次提交完全一致）
+    bash "$WS/tools/start_bench_service.sh" eager "$PORT" 2>&1 | tee "$OUT/service_start.log"
+    ;;
   *)
-    echo "unknown config: $CONFIG" >&2
+    echo "unknown config: $CONFIG (可用: eager / baseline|graph / candidate)" >&2
     exit 2
     ;;
 esac

@@ -147,7 +147,7 @@ stock 对照：`/opt/dtk/lib/rocblas/library_gpu4/GemmGenerality_AI_Eco.dat`
 | graph 基线 | 非 eager + stock 库 | 本轮调优的**同轮对照**（只开 graph，不带任何调优开关） |
 | 最优版 | 非 eager + 调优库 + aiter FA | 当前提交配置 |
 
-### 5.2 同节点对比（唯一可直接相减的两列）
+### 5.2 同卡 A/B：graph 基线 → 最优版（唯一可直接相减的两列）
 
 <!-- SAME_NODE_AB:BEGIN -->
 | 输入 | 并发 | graph 基线 tok/s | 最优版 tok/s | 吞吐提升 | TTFT 变化 | TPOT 变化 | 基线轮/候选轮 |
@@ -156,11 +156,37 @@ stock 对照：`/opt/dtk/lib/rocblas/library_gpu4/GemmGenerality_AI_Eco.dat`
 | 4096 | 8 | 104.84 | 115.66 | +10.32% | -10.0% | -9.2% | 1/2 |
 <!-- SAME_NODE_AB:END -->
 
+### 5.3 同卡 A/B：首提基线 eager → 最优版（赛事口径的正式对比）
+
+> 首提基线 = `--enforce-eager` + stock rocBLAS 库 + 默认 attention，
+> 与赛事「首次提交性能实测」口径完全一致；最优版只改了三处配置（见 §2）。
+> 两者**必须来自同一张卡**才能相减。
+
+<!-- SAME_NODE_AB_EAGER:BEGIN -->
+（待回填）
+<!-- SAME_NODE_AB_EAGER:END -->
+
 ---
 
-## 6. 节点差异警告（重要）
+## 6. 换卡与节点差异警告（重要）
 
 2026-10-31 复测发现：**同一配置在当前节点比 10-30 慢约 30%**。
+
+2026-11-01 05:08 起容器又被平台回收重建，**物理卡发生更换**。于是绝对值分三类，
+**只有同一张卡内部的两个数才允许相减**：
+
+| 类别 | 含义 | 可否相减 |
+|---|---|---|
+| 同卡 A/B | 同一张卡上 eager / graph 基线 / 最优版 三套 | ✅ 可以（§5.2、§5.3） |
+| 历史同节点 | 2026-10-31 节点上测的三套（当时未记录卡指纹） | ✅ 可以，但必须标注为历史会话 |
+| 跨卡存档 | 不同卡上的实验（含 10-30、10-27） | ❌ 不可相减，只作过程存档 |
+
+判定方式：每次压测由 `scripts/run_full_bench.sh` 把**卡指纹**写进
+`<run-dir>/run_config.txt` 的 `card_id=`；报告脚本 `scripts/bench_set.py`
+只把 `card_id` 与当前节点 `outputs/CARD_ID.txt` 一致的目录算作同卡，
+**没有 `card_id` 的老目录一律只作存档**，绝不混进同卡 A/B。
+
+历史节点对照（仅供参考，不可与当前卡相减）：
 
 | 配置 | 节点 | 4096/并发1 输出吞吐 |
 | --- | --- | ---: |
@@ -174,8 +200,8 @@ stock 对照：`/opt/dtk/lib/rocblas/library_gpu4/GemmGenerality_AI_Eco.dat`
 因此：
 
 - 跨节点的绝对值**不可直接比较**；
-- 收益结论一律用**同节点同轮**的 A/B；
-- 官方「>20% 复现偏差打回」这条要按同节点口径看，见 §8。
+- 收益结论一律用**同卡同轮**的 A/B；
+- 官方「>20% 复现偏差打回」这条要按同卡口径看，见 §8。
 
 ---
 
@@ -193,6 +219,11 @@ stock 对照：`/opt/dtk/lib/rocblas/library_gpu4/GemmGenerality_AI_Eco.dat`
 | 8 | `tools/check_submission.sh`：env.sh 变量检查允许缩进的 `export` | 否 | 自检脚本修正 |
 | 9 | `.gitignore`：排除 `/rocblas_tuned/`（运行时组装目录）与 `core.*`（3 GB 级转储） | 否 | 防止误提交 |
 | 10 | `platform/README.md`：补代码托管链接 | 否 | 镜像链接仍待用户补 |
+| 11 | `scripts/card_identity.sh`（新）、`scripts/bench_set.py`（新） | 否 | 卡指纹采集与「同卡 / 跨卡」判定；换卡后报告不会再把不同卡的绝对值相减 |
+| 12 | `scripts/run_full_bench.sh`：每次运行把 `card_id` 写进 `run_config.txt`；`--config eager` 支持首提基线口径 | 否 | 同卡三套压测可复核 |
+| 13 | `scripts/start_aiterfa_service.sh`：改用交付包组装的调优库路径（`$WORK_DIR/rocblas_tuned/library_gpu4`）+ 6 文件 SHA256 校验 + 端口参数 | 否 | 原先指向的 `tools/auto_select_tools/...` 是调优现场目录（已被 `.gitignore` 排除），换容器后不一定存在，会让最优版**静默退回 stock 库** |
+| 14 | `scripts/run_same_card_bench.sh`（新）：同一张卡上依次跑 eager → graph 基线 → 最优版 | 否 | 保证三套数据同卡可比 |
+| 15 | `scripts/collect_tuned_bench_into_submission.sh`：纳入仓库，并扩展为归集三套同卡原始数据 | 否 | 原先该脚本只在节点侧临时目录，新容器收尾会找不到 |
 
 **基线材料全部保留**：首提基线的 `submission/bench/round1.jsonl` / `round2.jsonl`、
 `summary.md`、`summary_detailed.md` 未删除；GitLab 标签 `baseline-submission` 指向首提基线提交。
@@ -226,6 +257,7 @@ env -u VLLM_ATTENTION_BACKEND bash tools/start_bench_service.sh graph 30000
 
 | 项 | 状态 | 原因 |
 |---|---|---|
+| 容器换卡 | **已处理** | 2026-11-01 05:08 起容器被平台回收重建，**物理卡更换**。旧卡的绝对值降级为「跨卡存档」，收益结论改用同卡 A/B（§6 口径表）；`scripts/card_identity.sh` + `scripts/bench_set.py` 负责判定 |
 | 赛事官方 ≥98% 一致率 | **BLOCKED** | 官方 GPU 参考输出、官方测试集、官方判分器均未下发；节点无外网 |
 | 公开基准（RefSpatial 等）复跑 | NOT_RUN（本轮） | 本轮任务范围不含精度测试 |
 | 16384/c64 档轮次 | **单轮** | 该档单轮耗时 3 h 48 min（128 请求排队 69 min，TTFT 均值 4,134,411 ms），两轮需 7.5 h+；其余五档均为两轮。表格已标注轮数 |

@@ -1,0 +1,77 @@
+{
+  "name": "tuned_graph_gemm_aiterfa",
+  "backend": "vllm",
+  "status": "submitted",
+  "description": "2026-10-31 起的最优版提交配置 = graph(非 eager) + GEMM 算子调优库 + ROCM_AITER_FA。相对首提基线(eager)只有三处差异：去掉 --enforce-eager、设置 ROCBLAS_TENSILE_LIBPATH、设置 VLLM_ATTENTION_BACKEND。证据见 reports/25_tuning_delivery_20261031.md 与 reports/tuning_comparison.md。",
+  "model_path": "/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV",
+  "served_model_name": "robobrain2.5-8b-nv",
+  "device": "K500SM_AI (1 x 63.98 GiB, gfx928)",
+  "dtype": "bfloat16",
+  "framework_version": "vllm 0.15.1+das.opt1.alpha.dtk2604",
+  "image": "jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0",
+  "server": {
+    "tensor_parallel_size": 1,
+    "pipeline_parallel_size": 1,
+    "max_model_len": 32768,
+    "gpu_memory_utilization": 0.85,
+    "max_num_batched_tokens": 4096,
+    "max_num_seqs": 64,
+    "no_enable_prefix_caching": true,
+    "limit_mm_per_prompt": {"image": 8},
+    "enforce_eager": false,
+    "port": 30000,
+    "entry": "submission/scripts/serve_vllm_patched.py"
+  },
+  "tuning": {
+    "rocblas_tensile_libpath": "$WORK_DIR/rocblas_tuned/library_gpu4",
+    "vllm_attention_backend": "ROCM_AITER_FA",
+    "vllm_rocm_use_aiter": null,
+    "comment_vllm_rocm_use_aiter": "不要设 VLLM_ROCM_USE_AITER=1：本镜像下会在 ViT mm_encoder_attention 的 flash op 崩溃（reports/23 §2 E8）",
+    "tuned_library_overlay": "submission/rocblas_tuned/library_gpu4",
+    "tuned_library_assemble_script": "submission/scripts/make_tuned_rocblas_lib.sh",
+    "tuned_library_files": {
+      "GemmGenerality_AI_Eco.dat": "ad891f317f5c097776e014d738f17e84d2e4af7dfc7ad352f01f0d60d28025f3",
+      "GemmGeneralityAdd_Eco.dat": "23e30c02a186d0c9a0cc851c2874752f1fc3f7fdd89ba77bf2cd5c5806324f58",
+      "GemmGenerality_SolutionName_AI_Eco.txt": "5509bf83b23f961c17b9a60021a2be070f431835b8920f34cedeac079697b1c3",
+      "GemmGeneralityAdd_SolutionName_Eco.txt": "8b5b348f95a93ab7f852a816389cc2e34f48806a96dd02b5a4842c035082ccd9",
+      "solutionIndex_AI_Eco.txt": "6ec0a9d84da70e5a2eeb0fa1dffe06c9f70feaf8defdc1d8203d9c09aa2d736c",
+      "solutionIndexAdd_Eco.txt": "3639767ab465c78e729e56850ce0ccbe2229d84f1dfaa7bb059bc8c62b43da79"
+    },
+    "stock_rocblas_ai_dat_sha256": "be0f15afdd77d40cd3f1cdcf400b84842d1b358342e9c59e4b489a22fc4248cf"
+  },
+  "rollback": {
+    "one_switch": "USE_TUNED=0 bash run.sh",
+    "only_library": "env -u ROCBLAS_TENSILE_LIBPATH bash tools/start_bench_service.sh graph 30000",
+    "only_attention": "env -u VLLM_ATTENTION_BACKEND bash tools/start_bench_service.sh graph 30000"
+  },
+  "commands": {
+    "assemble_library": "bash submission/scripts/make_tuned_rocblas_lib.sh",
+    "serve": "cd submission && bash run.sh",
+    "full_bench": "bash scripts/run_full_bench.sh --config candidate --tiers \"4096:1:2,4096:8:2,16384:1:2,16384:8:2,4096:64:2,16384:64:1\"",
+    "summarize": "python3 scripts/summarize_full_bench.py --run-dir outputs/fullbench_candidate_20261031_231152 --config candidate",
+    "compare": "python3 scripts/build_tuning_comparison.py --out reports/tuning_comparison.md",
+    "self_check": "bash tools/check_submission.sh"
+  },
+  "measured_same_node_20261031": {
+    "comment": "同节点同日 A/B：graph 基线(stock 库) vs 最优版。完整六档见 reports/25 §4。",
+    "graph_baseline_4096_c1_output_tok_s": 22.38,
+    "tuned_4096_c1_output_tok_s": 28.72,
+    "gain_4096_c1_percent": 28.3,
+    "graph_baseline_4096_c1_tpot_ms": 43.28,
+    "tuned_4096_c1_tpot_ms": 33.5
+  },
+  "quality": {
+    "model_files_modified": "无",
+    "sampling_modified": "无",
+    "official_accuracy_gate": "BLOCKED（缺官方 GPU 参考输出与判分器）"
+  },
+  "artifacts": [
+    "reports/25_tuning_delivery_20261031.md",
+    "reports/tuning_comparison.md",
+    "reports/23_tuning_progress_20261030.md",
+    "reports/22_gemm_tuning.md",
+    "reports/evidence/gemm_tuning_20261030/",
+    "submission/rocblas_tuned/library_gpu4/",
+    "outputs/fullbench_candidate_20261031_231152/"
+  ]
+}
