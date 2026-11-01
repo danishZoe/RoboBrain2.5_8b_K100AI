@@ -121,6 +121,99 @@ def replace_row(text: str, prefix_regex: str, new_row: str, label: str) -> str:
     return out
 
 
+# ---------------------------------------------------------------------------
+# 验收标准 §8.2「优化门槛（≥10%）」核算（reports/05_final.md §4.6）
+#
+# 为什么必须自动生成：这一节原来手写着 10-27 节点的旧数字和旧结论
+# （「提交配置保持首提基线 --enforce-eager」），与现在的提交配置（最优版）矛盾；
+# 而手写数字在补跑重档后又会过期。改成从**同一张卡**的原始 JSONL 现场算，
+# 与 §4.1 / §5.3 用的是同一套 bench_set 数据口径。
+# ---------------------------------------------------------------------------
+OPTGATE_BEGIN = "<!-- OPTGATE:BEGIN -->"
+OPTGATE_END = "<!-- /OPTGATE -->"
+
+
+def replace_optgate(text: str, body: str) -> str:
+    if OPTGATE_BEGIN not in text or OPTGATE_END not in text:
+        raise SystemExit("ERROR: reports/05_final.md 找不到 OPTGATE 标记对")
+    pat = re.compile(re.escape(OPTGATE_BEGIN) + r".*?" + re.escape(OPTGATE_END), re.S)
+    return pat.sub(lambda _m: f"{OPTGATE_BEGIN}\n{body}\n{OPTGATE_END}", text, count=1)
+
+
+def fmt_optgate(eager_rows, cand_rows, first_dirs, cand_dirs):
+    """生成 §4.6 正文：§8.2 的逐档门槛核算 + 三条结论。
+
+    只用**同一张卡**上的 eager（首次提交口径）与最优版数据；任一侧缺档的档位
+    直接不进表（不拿跨卡数据顶替）。
+    """
+    d = deltas(eager_rows, cand_rows)
+
+    def dirs_with(dirs, key):
+        """该档位实际有数据的目录（不把空目录列进证据链）。"""
+        return [x for x in (dirs or []) if bench_set.load_rows(x).get(key)]
+
+    lines = [
+        "### 4.6 验收标准 §8.2 优化门槛（≥10%）核算",
+        "",
+        "§8.2 有两条硬要求：**同卡型、同框架、同负载下提升 ≥10%**；"
+        "**优化后必须重跑官方精度门槛，精度未通过的性能结果不算优化验收成功**。",
+        "下表按 §8.2 的表格模板逐格填写；数字全部取自**同一张卡**上的原始 JSONL，"
+        "由 `scripts/patch_report25_conclusion.py` 现场计算生成（不手写、不跨卡相减）。",
+        "",
+        "| 档位/指标 | 首次提交基准（eager） | 优化结果（最优版） | 公式与变化 | 精度结果 | 原始证据 |",
+        "|---|---|---|---|---|---|",
+    ]
+
+    hit, miss = [], []
+    for key in ORDER:
+        if key not in d:
+            continue
+        bt, ct, pct = d[key]
+        v = float(pct.strip("%"))
+        mark = "✅ ≥10%" if v >= 10.0 else "❌ <10%"
+        de = dirs_with(first_dirs, key)
+        dc = dirs_with(cand_dirs, key)
+        ev = ("、".join(f"`outputs/{Path(x).name}/`" for x in de) or "（无）") + " + " + \
+             ("、".join(f"`outputs/{Path(x).name}/`" for x in dc) or "（无）")
+        lines.append(
+            f"| {TIER_NAME[key]} 输出吞吐 tok/s | {bt:.2f} | {ct:.2f} | "
+            f"`({ct:.2f} / {bt:.2f} - 1) × 100%` = **{pct}**（{mark}） | "
+            "官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；"
+            "内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | "
+            f"{ev} |"
+        )
+        (hit if v >= 10.0 else miss).append(f"{TIER_NAME[key]} {pct}")
+
+    if not d:
+        lines.append("| （当前卡上没有同卡 eager 与最优版的成对档位数据） | — | — | — | — | — |")
+
+    n_all = len(d)
+    n_hit = len(hit)
+    lines += [
+        "",
+        "**结论（逐条对照 §8.2）**：",
+        "",
+        f"1. **≥10% 门槛：{n_all} 个可核算档位中 {n_hit} 个达标"
+        f"（{'、'.join(hit) if hit else '无'}）"
+        f"{'；未达标：' + '、'.join(miss) if miss else ''}。**",
+        "   官方原文只说「以首次提交的性能实测为基准，提升 10% 及以上的优化另单独计费」，"
+        "未给出跨档位的汇总口径；按 §8.2「不因单档提升就宣称整件已获官方认可」，"
+        "**本报告只逐档如实给出，不宣称整件达到 ≥10%**。",
+        "2. **精度复验：无法完成 → §8.2 的第二个条件不成立。**",
+        "   官方精度门槛因缺官方 GPU 参考输出与判分器而 **BLOCKED**"
+        "（见 `reports/08_gap_vs_official_baseline.md` 风险 #1），"
+        "无法证明非 eager 配置下输出数值变化是无害的。",
+        "3. **采纳决策：提交配置 = 最优版**"
+        "（graph 非 eager + GEMM 算子调优库 + `ROCM_AITER_FA`）。",
+        "   收益结论一律取自**同一张卡**上的 A/B（见 §4.1、`reports/25_tuning_delivery_20261031.md` §5.3）；"
+        "**精度结论仍为 BLOCKED，不以性能结果冒充精度验收**。",
+        "",
+        "> 一句话：**同卡实测的吞吐提升逐档如上表；≥10% 只在部分档位成立，"
+        "而精度复验因缺官方材料无法完成 —— 如实标注，不凑数。**",
+    ]
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--run-dir", default="",
@@ -403,8 +496,12 @@ def main():
     a = ftxt.index(anchor)
     canonical = new_kj + "\n\n" + best_block + "\n\n" + eager_block + "\n\n" + baseline_head + "\n\n"
     ftxt = ftxt[:m.start()] + canonical + ftxt[a:]
+
+    # §4.6 验收标准 §8.2 的优化门槛核算：按同卡实测自动生成（不手写、不跨卡）
+    ftxt = replace_optgate(ftxt, fmt_optgate(eager, cand, first_dirs, cand_dirs))
+
     fp.write_text(ftxt, encoding="utf-8")
-    print(f"[patch] updated {fp}")
+    print(f"[patch] updated {fp}（含 §4.6 §8.2 门槛核算）")
 
 
 def official_table(cand_rows):
