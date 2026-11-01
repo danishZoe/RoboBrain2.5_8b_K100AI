@@ -10,4 +10,5 @@ note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs�
                  代码托管：https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai
                  本次交付配置 = 最优版：graph(非 eager) + GEMM 算子调优库 + ROCM_AITER_FA
                  换卡后所有收益结论均取自同一张卡上的三套 A/B（scripts/bench_set.py 判定）。
-                 六档官方口径表：基线 eager 与最优版均在当前卡（2026-11-01 换卡后）实测。
+                 六档官方口径表：基线 eager 与最优版均在当前卡（2026-11-01 换卡后）实测。revision_note_commit= 5f4dfa4cea63481d02fc0db0a634fa1f973b4852
+revision_note_short = 5f4dfa4
