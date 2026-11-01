@@ -55,12 +55,25 @@ if [ ! -d "$NEWLIB" ]; then
 fi
 
 # --- 3) 校验 6 个差异文件（防止库被改坏 / 路径指错）---------------------------
-EXPECTED="GemmGeneralityAdd_Eco.dat 23e30c02a186d0c9a0cc851c2874752f1fc3f7fdd89ba77bf2cd5c5806324f58
-GemmGeneralityAdd_SolutionName_Eco.txt 8b5b348f95a93ab7f852a816389cc2e34f48806a96dd02b5a4842c035082ccd9
-GemmGenerality_AI_Eco.dat ad891f317f5c097776e014d738f17e84d2e4af7dfc7ad352f01f0d60d28025f3
-GemmGenerality_SolutionName_AI_Eco.txt 5509bf83b23f961c17b9a60021a2be070f431835b8920f34cedeac079697b1c3
-solutionIndexAdd_Eco.txt 3639767ab465c78e729e56850ce0ccbe2229d84f1dfaa7bb059bc8c62b43da79
-solutionIndex_AI_Eco.txt 6ec0a9d84da70e5a2eeb0fa1dffe06c9f70feaf8defdc1d8209d9c09aa2d736c"
+# 清单唯一真源 = submission/rocblas_tuned/library_gpu4/DIFF_FILES.sha256
+#
+# 为什么不用内嵌清单：早期本脚本另抄了一份哈希，与
+# submission/scripts/make_tuned_rocblas_lib.sh 里的那份漂移了 1 个字符
+# （期望 ...d8209d9c…，实际 ...d8203d9c…），结果最优版服务在任何节点上都起不来：
+# 组装脚本自检通过、启动脚本校验失败 → rc=5「服务未就绪」。改为读同一份清单后，
+# 两处不会再各自漂移；并且下面还会把「清单 ↔ 仓库内 overlay ↔ 运行时装配目录」
+# 三方交叉核对，任一处对不上都拒绝启动。
+MANIFEST_FILE="$WS/submission/rocblas_tuned/library_gpu4/DIFF_FILES.sha256"
+OVERLAY_LIB="$WS/submission/rocblas_tuned/library_gpu4"
+if [ ! -f "$MANIFEST_FILE" ]; then
+  echo "[start] ERROR: 缺少差异文件清单：$MANIFEST_FILE" >&2
+  exit 1
+fi
+EXPECTED="$(grep -vE '^[[:space:]]*(#|$)' "$MANIFEST_FILE" || true)"
+if [ -z "$EXPECTED" ]; then
+  echo "[start] ERROR: 差异文件清单为空：$MANIFEST_FILE" >&2
+  exit 1
+fi
 rc=0
 while read -r fname fsha; do
   [ -z "${fname:-}" ] && continue
@@ -72,6 +85,15 @@ while read -r fname fsha; do
     echo "[start] ERROR: 调优库哈希不符 $fname 期望=$fsha 实际=$cur" >&2; rc=1
   else
     echo "[start] OK $fname $cur"
+  fi
+  # 交叉核对：仓库内 overlay 也必须是同一份内容（清单漂移能在这里被抓住）
+  if [ -f "$OVERLAY_LIB/$fname" ]; then
+    oc=$(sha256sum "$OVERLAY_LIB/$fname" | cut -d' ' -f1)
+    if [ "$oc" != "$fsha" ]; then
+      echo "[start] ERROR: 仓库内 overlay 与清单不符 $fname 清单=$fsha overlay=$oc" >&2; rc=1
+    fi
+  else
+    echo "[start] ERROR: 仓库内 overlay 缺少 $fname" >&2; rc=1
   fi
 done <<< "$EXPECTED"
 if [ "$rc" != "0" ]; then

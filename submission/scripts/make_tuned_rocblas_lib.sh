@@ -28,15 +28,21 @@ STOCK_DIR="${STOCK_DIR:-/opt/dtk/lib/rocblas/library_gpu4}"
 OVERLAY_DIR="$REPO_DIR/rocblas_tuned/library_gpu4"
 TARGET_DIR="$WORK_DIR/rocblas_tuned/library_gpu4"
 
-# 差异文件清单：文件名 SHA256（与仓库内 MANIFEST 一致）
-read -r -d '' MANIFEST <<'EOF' || true
-GemmGeneralityAdd_Eco.dat 23e30c02a186d0c9a0cc851c2874752f1fc3f7fdd89ba77bf2cd5c5806324f58
-GemmGeneralityAdd_SolutionName_Eco.txt 8b5b348f95a93ab7f852a816389cc2e34f48806a96dd02b5a4842c035082ccd9
-GemmGenerality_AI_Eco.dat ad891f317f5c097776e014d738f17e84d2e4af7dfc7ad352f01f0d60d28025f3
-GemmGenerality_SolutionName_AI_Eco.txt 5509bf83b23f961c17b9a60021a2be070f431835b8920f34cedeac079697b1c3
-solutionIndexAdd_Eco.txt 3639767ab465c78e729e56850ce0ccbe2229d84f1dfaa7bb059bc8c62b43da79
-solutionIndex_AI_Eco.txt 6ec0a9d84da70e5a2eeb0fa1dffe06c9f70feaf8defdc1d8203d9c09aa2d736c
-EOF
+# 差异文件清单：文件名 SHA256
+# 唯一真源 = rocblas_tuned/library_gpu4/DIFF_FILES.sha256
+# （早期本脚本与 scripts/start_aiterfa_service.sh 各抄一份清单，已漂移过 1 个字符，
+#   导致「组装自检通过但启动校验失败」，最优版服务起不来）
+MANIFEST_FILE="$REPO_DIR/rocblas_tuned/library_gpu4/DIFF_FILES.sha256"
+if [ -f "$MANIFEST_FILE" ]; then
+  MANIFEST="$(grep -vE '^[[:space:]]*(#|$)' "$MANIFEST_FILE" || true)"
+else
+  echo "[tuned-lib] ERROR: 缺少差异文件清单：$MANIFEST_FILE" >&2
+  exit 1
+fi
+if [ -z "$MANIFEST" ]; then
+  echo "[tuned-lib] ERROR: 差异文件清单为空：$MANIFEST_FILE" >&2
+  exit 1
+fi
 
 echo "[tuned-lib] stock=$STOCK_DIR"
 echo "[tuned-lib] overlay=$OVERLAY_DIR"
