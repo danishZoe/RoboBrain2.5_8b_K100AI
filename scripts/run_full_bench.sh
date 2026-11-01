@@ -163,10 +163,17 @@ echo "[fullbench] service ready"
 } > "$OUT/worker_env.txt"
 
 # --- 六档 × N 轮 ---------------------------------------------------------------
+# tier 语法 = 输入长度:并发[:轮数]；轮数省略时取 --rounds
+# 注意：判断「是否省略轮数」必须看 REST 里有没有第二个冒号，不能用
+# 「轮数 == 并发数」来推断 —— 4096:1:1（并发1、跑1轮）会被误判成
+# 「没写轮数」而回落到 --rounds=2，白跑一轮。
 IFS=',' read -ra TIER_ARR <<< "$TIERS"
 for T in "${TIER_ARR[@]}"; do
   ILEN="${T%%:*}"; REST="${T#*:}"; C="${REST%%:*}"
-  NR="${REST##*:}"; [ "$NR" = "$C" ] && NR="$ROUNDS"
+  case "$REST" in
+    *:*) NR="${REST##*:}" ;;
+    *)   NR="$ROUNDS" ;;
+  esac
   N=$(( C * 2 > 8 ? C * 2 : 8 ))
   for R in $(seq 1 "$NR"); do
     TAG="round${R}_${ILEN}_1024_c${C}"
