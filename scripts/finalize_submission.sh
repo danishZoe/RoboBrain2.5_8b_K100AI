@@ -18,6 +18,19 @@ cd "$WS" || exit 1
 # 让 scripts/bench_set.py 按当前工作目录解析（默认写死的是节点路径）
 export ROBO_WS="$WS"
 
+# --- 并发保护 -------------------------------------------------------------------
+# 节点侧守护脚本（finalize_after_bench.sh）与本地看门狗（wait_and_finish.ps1）
+# 都可能触发收尾；并发执行会互撞 git index.lock，并互相覆盖 MANIFEST / tarball。
+# 这里用 flock 串行化：后到者等待先到者结束（最多 1 h），而不是并行写同一批文件。
+LOCKFILE="$WS/tmp/.finalize.lock"
+mkdir -p "$(dirname "$LOCKFILE")"
+exec 9>"$LOCKFILE"
+if ! flock -w 3600 9; then
+  echo "ERROR: 另一个 finalize_submission.sh 仍在运行（锁：$LOCKFILE），本次不重复执行" >&2
+  exit 1
+fi
+echo "[finalize] 已取得收尾锁：$LOCKFILE"
+
 CAND_DIR="${CAND_DIR:-}"
 OUT_TARBALL="${OUT_TARBALL:-tmp/publish_final.tar.gz}"
 CAND_DIR_PINNED=0
