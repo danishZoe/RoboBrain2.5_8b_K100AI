@@ -1,53 +1,39 @@
-# 最优版压测数据（2026-10-31）
+# 最优版压测原始数据（提交配置）
 
 **配置**：graph(非 eager) + GEMM 算子调优库 + `VLLM_ATTENTION_BACKEND=ROCM_AITER_FA`
-（即 `env.sh` 里 `USE_TUNED=1` 的提交配置）。
+（即 `USE_TUNED=1` 的提交配置，见 `../../env.sh`）。
+
+**会话**：当前节点（同一张卡）
+card_id=host:crdnotebook-2114695384420274177-scnjz2s4uc-41571:boot:62ce6c81-9a7b-44b6-b994-b5054faa7f6d
 
 **口径**：单卡 K100AI（K500SM_AI / gfx928 / 63.98 GiB）/ vLLM 0.15.1+das.opt1.alpha.dtk2604 /
 BF16 / TP=1 / `--gpu-memory-utilization 0.85 --max-model-len 32768` /
 `--max-num-batched-tokens 4096 --max-num-seqs 64 --no-enable-prefix-caching` /
-`--limit-mm-per-prompt '{"image":8}'`；官方 `bench_serving` 客户端，image 数据集，
+`--limit-mm-per-prompt '{"image":8}'`；官方 bench_serving 客户端，image 数据集，
 1×1080p 图/请求，输出 1024 token，seed 1，请求数 `max(8, 2×并发)`。
-
-## ⚠️ 本目录是「会话日志转录版」，不是客户端原始 jsonl
-
-原始文件在节点工作目录
-`outputs/fullbench_candidate_20261031_231152/`（每档每轮一个 `round*.jsonl` +
-同名 `.log`，另有 `run_config.txt` / `service_start.log` / `worker_env.txt` /
-`summary.md` / `agreement.md`）。
-
-2026-11-01 05:08 起该容器不可达（网关端口可连但收不到 SSH banner，同网关其他
-容器正常），无法取回原始文件。本目录是把压测客户端与汇总脚本的**原样输出**
-逐字转录恢复的实测值，字段名与官方口径一致；文件名前缀 `recovered_` 用于与
-原始文件区分。
-
-**未留存**：`total_throughput`、部分档位的 `p99_ttft_ms` / `p99_tpot_ms`。
-这三项**没有做任何推算**，在报告表中以 `—` 标注。
-
-来源与逐项说明见 `../../reports/evidence/bench_recovered_20261101/README.md`。
-
-## 文件
 
 | 文件 | 内容 |
 |---|---|
-| `recovered_round*_<输入>_1024_c<并发>.jsonl` | 每档每轮的实测值（字段与官方一致） |
-| `summary.md` | 六档汇总（官方 13 列格式，取记录轮）与逐轮波动 |
-| `../round1.jsonl`、`../round2.jsonl` | **首提基线（eager）的原始数据**，未做任何改动 |
+| `round*_<输入>_1024_c<并发>.jsonl` | 每档每轮的**客户端原始结果文件**（官方 13 列字段） |
+| `round*_<输入>_1024_c<并发>.log` | 客户端完整日志（输入/输出 token 拆分、TTFT/TPOT/ITL 分布） |
+| `recovered_round*.jsonl` | 节点不可达期间由**会话日志转录**恢复的结果（内容为压测客户端/汇总脚本的原样输出，**不是**客户端原始文件）；被新的客户端原始文件取代后保留作过程存档 |
+| `run_config.txt` | 本次压测的配置指纹（卡指纹 `card_id=`、档位、模型、vllm 版本、stock/候选库哈希、git revision） |
+| `service_start.log` | 服务启动输出（就绪耗时） |
+| `worker_env.txt` | 推理 worker 进程的实际环境（调优开关是否真正进入进程） |
+| `summary.md` | 汇总表（13 列 + 轮次波动） |
+| `agreement.md` | 同口径探针与 transformers 基线的逐坐标比对 |
 
-## 节点恢复后的补全
+**首提基线（eager）的原始数据**：上一级目录 `bench/round1.jsonl` / `bench/round2.jsonl`
+（10-27 节点的官方口径基准）；**同一张卡**上的 eager 与 graph 基线见
+`bench/same_card_eager/` 与 `bench/same_card_baseline/`。
 
-```bash
-cd /root/private_data/workspace/robo
-bash scripts/collect_tuned_bench_into_submission.sh outputs/fullbench_candidate_20261031_231152
-python3 scripts/fill_tuning_tables.py
-bash tools/record_revision.sh
-bash tools/check_submission.sh
-```
+> `recovered_round*.jsonl` 是 2026-11-01 05:08 节点不可达期间，由压测客户端与汇总脚本的
+> **原样输出转录**恢复的实测值（字段与官方口径一致，**不是**客户端原始文件），
+> 文件名前缀用于与原始文件区分。被新的客户端原始文件取代后保留作过程存档。
 
-`collect_tuned_bench_into_submission.sh` 会用**原始文件**覆盖本目录
-（并写入 `run_config.txt`、`worker_env.txt`、`summary.md` 等），
-`fill_tuning_tables.py` 重跑后报告表中的 `—` 会被真实数值填满。
+> ⚠️ **跨节点的绝对值不可直接比较**。容器被平台回收重建后物理卡会更换，
+> 收益结论一律用**同一张卡**上三套配置的 A/B（判定见 `../../scripts/bench_set.py`）。
 
-> **跨节点的绝对值不可直接比较**：2026-10-31 节点在同配置下比 2026-10-30 节点
-> 慢约 30%（已逐项核对服务参数、graph 捕获列表与 worker 环境），
-> 收益结论一律用同节点同轮的 A/B，详见 `../../reports/25_tuning_delivery_20261031.md` §6。
+> 同一配置若被拆到**多个服务实例**跑（例如 16384/并发64 这类单轮约 3.8 h 的重档
+> 单独起一次服务），本目录会同时保留各次的 `round*.jsonl`；
+> 同名但内容不同的文件以「运行目录名__原名」保存，**绝不静默覆盖**。

@@ -104,23 +104,39 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
 `--gpu-memory-utilization 0.85` / `--max-num-batched-tokens 4096` / `--max-num-seqs 64` /
 `--no-enable-prefix-caching`；客户端为官方指定的 `sglang.bench_serving`，
 每请求 1 张 1080p 图，`--seed 1`，请求数 `max(8, 2×并发)`，输出实际打满 1024 token。
+**以下「最优版」与「首提基线 eager」两张表来自同一张物理卡**（容器重建会换卡，跨卡绝对值不可比，见 `reports/25_tuning_delivery_20261031.md` §6）。
 
 <!-- BEST_BENCH_TABLE:BEGIN -->
 **最优版（当前提交配置）六档实测**
 
-| random_input_len | random_output_len | max_concurrency | completed | duration | request_throughput | output_throughput | total_throughput | mean_ttft_ms | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
+| random_input_len | random_output_len | max_concurrency | completed | duration | | request_throughput | output_throughput | total_throughput | mean_ttft_ms | | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 4096 | 1024 | 1 | 8 | 285.07 | 0.03 | 28.74 | 207.23 | 1448.69 | 1630.32 | 33.42 | 33.62 | 35632.50 |
-| 4096 | 1024 | 8 | 16 | 141.29 | 0.11 | 115.96 | 836.86 | 9786.72 | 10444.80 | 59.46 | 66.23 | 70614.40 |
-| 4096 | 1024 | 64 | 128 | 941.54 | 0.14 | 139.21 | — | 114388.36 | — | 309.35 | — | 430852.94 |
-| 16384 | 1024 | 1 | 8 | 426.14 | 0.02 | 19.22 | 381.56 | 6717.82 | 6826.51 | 45.50 | 48.37 | 53266.30 |
-| 16384 | 1024 | 8 | 16 | 363.36 | 0.04 | 45.09 | — | 25831.20 | — | 151.86 | — | 181184.52 |
-| 16384 | 1024 | 64 | 128 | 13667.91 | 0.01 | 9.59 | — | 4134411.49 | 6101802.49 | 1416.31 | — | 5583300.15 |
+| 4096 | 1024 | 1 | 8 | 285.29 | 0.03 | 28.71 | 206.98 | 1411.01 | 1427.87 | 33.48 | 33.67 | 35660.08 |
+| 4096 | 1024 | 8 | 16 | 144.12 | 0.11 | 113.68 | 820.13 | 10346.68 | 10402.20 | 60.30 | 60.37 | 72028.57 |
+| 4096 | 1024 | 64 | 128 | 931.55 | 0.14 | 140.70 | 1014.65 | 114687.63 | 490857.75 | 304.85 | 661.73 | 426545.41 |
+| 16384 | 1024 | 1 | 8 | 429.72 | 0.02 | 19.06 | 378.74 | 6738.19 | 6878.12 | 45.92 | 50.01 | 53709.66 |
+| 16384 | 1024 | 8 | 16 | 361.86 | 0.04 | 45.28 | 898.14 | 26063.13 | 54884.90 | 150.95 | 166.22 | 180484.79 |
+| 16384 | 1024 | 64 | 128 | 13480.76 | 0.01 | 9.72 | 192.86 | 4062229.71 | 6026783.45 | 1395.95 | 1826.13 | 5490284.66 |
 
-> 原始数据 `outputs/fullbench_candidate_20261031_231152/`，对比与逐轮波动见 `reports/25_tuning_delivery_20261031.md` §4 与 `reports/tuning_comparison.md`。
+> 原始数据 `outputs/fullbench_candidate_20261101_114614/`、`outputs/fullbench_candidate_20261101_131934/`，对比与逐轮波动见 `reports/25_tuning_delivery_20261031.md` §4 与 `reports/tuning_comparison.md`。
 <!-- BEST_BENCH_TABLE:END -->
 
-**首提基线（eager，冻结基准）同口径原始结果**（口径同上，仅多 `--enforce-eager`、stock rocBLAS 库、默认 attention）：
+<!-- SAME_CARD_EAGER_TABLE:BEGIN -->
+**首提基线 eager（同一张卡，赛事「首次提交」口径）六档实测**
+
+| random_input_len | random_output_len | max_concurrency | completed | duration | | request_throughput | output_throughput | total_throughput | mean_ttft_ms | | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
+| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 4096 | 1024 | 1 | 8 | 376.56 | 0.02 | 21.76 | 156.73 | 1463.22 | 1501.73 | 44.58 | 44.80 | 47067.92 |
+| 4096 | 1024 | 8 | 16 | 160.96 | 0.10 | 101.79 | 734.01 | 10662.32 | 10729.07 | 68.22 | 68.40 | 80449.85 |
+| 4096 | 1024 | 64 | 128 | 976.37 | 0.13 | 134.24 | 968.08 | 120342.17 | 517241.83 | 319.64 | 687.81 | 447331.55 |
+| 16384 | 1024 | 1 | 8 | 494.46 | 0.02 | 16.57 | 328.88 | 6949.22 | 7080.81 | 53.62 | 56.27 | 61806.28 |
+| 16384 | 1024 | 8 | 16 | 372.49 | 0.04 | 43.99 | 873.45 | 26418.17 | 55944.59 | 155.75 | 171.72 | 185747.38 |
+| 16384 | 1024 | 64 | 128 | 14024.38 | 0.01 | 9.35 | 185.41 | 4219608.93 | 6265649.26 | 1454.50 | 1820.71 | 5707560.63 |
+
+> 原始数据 `outputs/fullbench_eager_20261101_090701/`；与最优版的同卡对比见 `reports/tuning_comparison.md` §2.1。
+<!-- SAME_CARD_EAGER_TABLE:END -->
+
+**首提基线（eager，冻结基准，2026-10-27 节点）同口径原始结果**（跨卡存档，仅作历史参考；口径同上，仅多 `--enforce-eager`、stock rocBLAS 库、默认 attention）：
 
 <!-- FINAL_BENCH_TABLE -->
 | random_input_len | random_output_len | max_concurrency | completed | duration | request_throughput | output_throughput | total_throughput | mean_ttft_ms | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
@@ -223,28 +239,30 @@ curl -sf http://127.0.0.1:30000/v1/chat/completions \
 <!-- CLEAN_REPRO:END -->
 
 <!-- OPTGATE:BEGIN -->
-
 ### 4.6 验收标准 §8.2 优化门槛（≥10%）核算
 
 §8.2 有两条硬要求：**同卡型、同框架、同负载下提升 ≥10%**；**优化后必须重跑官方精度门槛，精度未通过的性能结果不算优化验收成功**。
-下表按 §8.2 的表格模板逐格填写，数字取自原始文件。
+下表按 §8.2 的表格模板逐格填写；数字全部取自**同一张卡**上的原始 JSONL，由 `scripts/patch_report25_conclusion.py` 现场计算生成（不手写、不跨卡相减）。
 
-| 档位/指标 | 首次提交基准 | 优化结果 | 公式与变化 | 精度结果 | 原始证据 |
+| 档位/指标 | 首次提交基准（eager） | 优化结果（最优版） | 公式与变化 | 精度结果 | 原始证据 |
 |---|---|---|---|---|---|
-| 4096/1 输出吞吐 tok/s | 25.15 | 32.81 | `(32.81 / 25.15 - 1) × 100%` = **+30.5%**（≥10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 基线/判分器）；内部一致性：与 transformers 基线逐坐标 2/6 = 33.3% | `outputs/phase5_ab_noneager/noneager_20261027_194104/` + `submission/bench/round2.jsonl` |
-| 4096/8 输出吞吐 tok/s | 144.91 | 145.15 | `(145.15 / 144.91 - 1) × 100%` = **+0.2%**（<10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 基线/判分器）；内部一致性：与 transformers 基线逐坐标 2/6 = 33.3% | `outputs/phase5_ab_noneager/noneager_20261027_194104/` + `submission/bench/round2.jsonl` |
+| 4096/并发1 输出吞吐 tok/s | 21.77 | 28.75 | `(28.75 / 21.77 - 1) × 100%` = **+32.07%**（✅ ≥10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | `outputs/fullbench_eager_20261101_090701/` + `outputs/fullbench_candidate_20261101_114614/` |
+| 4096/并发8 输出吞吐 tok/s | 101.65 | 113.68 | `(113.68 / 101.65 - 1) × 100%` = **+11.84%**（✅ ≥10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | `outputs/fullbench_eager_20261101_090701/` + `outputs/fullbench_candidate_20261101_114614/` |
+| 4096/并发64 输出吞吐 tok/s | 133.86 | 140.70 | `(140.70 / 133.86 - 1) × 100%` = **+5.11%**（❌ <10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | `outputs/fullbench_eager_20261101_090701/` + `outputs/fullbench_candidate_20261101_114614/` |
+| 16384/并发1 输出吞吐 tok/s | 16.50 | 19.43 | `(19.43 / 16.50 - 1) × 100%` = **+17.80%**（✅ ≥10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | `outputs/fullbench_eager_20261101_090701/` + `outputs/fullbench_candidate_20261101_114614/` |
+| 16384/并发8 输出吞吐 tok/s | 44.16 | 45.28 | `(45.28 / 44.16 - 1) × 100%` = **+2.54%**（❌ <10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | `outputs/fullbench_eager_20261101_090701/` + `outputs/fullbench_candidate_20261101_114614/` |
+| 16384/并发64 输出吞吐 tok/s | 9.35 | 9.72 | `(9.72 / 9.35 - 1) × 100%` = **+4.03%**（❌ <10%） | 官方精度门槛 **BLOCKED**（缺官方 GPU 参考输出与判分器）；内部逐坐标一致性见 `submission/bench/tuned/agreement.md` | `outputs/fullbench_eager_20261101_171235/` + `outputs/fullbench_candidate_20261101_131934/` |
 
 **结论（逐条对照 §8.2）**：
 
-1. **≥10% 门槛：只在并发 1 档成立，且不构成整件级提升。**
-   最高提升出现在 4096/1 档（**+30.5%**），但官方口径的核心档（并发 8 / 64）没有同量级收益；§8.2 明确「不因单档提升就宣称整件已获官方认可」，因此本报告**不宣称整件达到 ≥10%**。
+1. **≥10% 门槛：6 个可核算档位中 3 个达标（4096/并发1 +32.07%、4096/并发8 +11.84%、16384/并发1 +17.80%）；未达标：4096/并发64 +5.11%、16384/并发8 +2.54%、16384/并发64 +4.03%。**
+   官方原文只说「以首次提交的性能实测为基准，提升 10% 及以上的优化另单独计费」，未给出跨档位的汇总口径；按 §8.2「不因单档提升就宣称整件已获官方认可」，**本报告只逐档如实给出，不宣称整件达到 ≥10%**。
 2. **精度复验：无法完成 → §8.2 的第二个条件不成立。**
-   §8.2 要求「优化后重跑服务功能及官方精度门槛，精度未通过的性能结果不算优化验收成功」。本任务的官方精度门槛因缺官方 GPU 参考输出与判分器而 **BLOCKED**（见 `reports/08_gap_vs_official_baseline.md` 风险 #1），无法证明非 eager 配置下输出数值变化（内部逐坐标一致率 2/6 = 33.3%）是无害的。
-3. **因此采纳决策：提交配置保持首提基线（`--enforce-eager`）。**
-   零风险、可复现、与提交表完全一致；非 eager 的可启动性与收益/代价在 `reports/11_tuning_experiments.md` §2 如实登记，不隐藏、也不冒充已采纳的优化。
+   官方精度门槛因缺官方 GPU 参考输出与判分器而 **BLOCKED**（见 `reports/08_gap_vs_official_baseline.md` 风险 #1），无法证明非 eager 配置下输出数值变化是无害的。
+3. **采纳决策：提交配置 = 最优版**（graph 非 eager + GEMM 算子调优库 + `ROCM_AITER_FA`）。
+   收益结论一律取自**同一张卡**上的 A/B（见 §4.1、`reports/25_tuning_delivery_20261031.md` §5.3）；**精度结论仍为 BLOCKED，不以性能结果冒充精度验收**。
 
-> 一句话：**本次交付没有可宣称达标的性能优化**。同口径基准已完整建立、实验方法与判定标准已实验前登记、单变量 A/B 已执行并留证；但 §8.2 的两个条件（≥10% 且精度复验通过）在本节点上只满足前者的一部分，而后者因缺官方材料无法满足 —— 如实标注，不凑数。
-
+> 一句话：**同卡实测的吞吐提升逐档如上表；≥10% 只在部分档位成立，而精度复验因缺官方材料无法完成 —— 如实标注，不凑数。**
 <!-- /OPTGATE -->
 
 ---

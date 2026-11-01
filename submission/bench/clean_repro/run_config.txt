@@ -1,0 +1,9 @@
+run_id=clean_repro_full_20261031
+started_at=2026-10-31T22:22:29+08:00
+framework=vllm
+card=K100-AI
+precision=bf16
+tp=1
+max_len=32768
+mem_frac=0.85
+extra_args=--enforce-eager --no-enable-prefix-caching --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt={"image":8}

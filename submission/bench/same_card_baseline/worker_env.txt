@@ -1,0 +1,5 @@
+--- worker env (ROCBLAS/VLLM) ---
+pid=14017
+HIP_PATH=/opt/dtk/hip
+VLLM_LOGGING_LEVEL=WARNING
+pid=15257

@@ -1,0 +1,6 @@
+--- worker env (ROCBLAS/VLLM) ---
+pid=22431
+HIP_PATH=/opt/dtk/hip
+VLLM_ATTENTION_BACKEND=ROCM_AITER_FA
+ROCBLAS_TENSILE_LIBPATH=/root/private_data/workspace/robo/rocblas_tuned/library_gpu4
+VLLM_LOGGING_LEVEL=WARNING

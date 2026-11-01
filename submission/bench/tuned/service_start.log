@@ -1,3 +1,13 @@
-[start] tuned lib=/root/private_data/workspace/robo/tools/auto_select_tools/optimization_configs/new/config/library_gpu4 log=/root/private_data/workspace/robo/logs/serve_graph_aiterfa_20261031-231202.log
-[start] pid=8876
+[start] 调优库组装/校验通过
+[start] OK GemmGeneralityAdd_Eco.dat 23e30c02a186d0c9a0cc851c2874752f1fc3f7fdd89ba77bf2cd5c5806324f58
+[start] OK GemmGeneralityAdd_SolutionName_Eco.txt 8b5b348f95a93ab7f852a816389cc2e34f48806a96dd02b5a4842c035082ccd9
+[start] OK GemmGenerality_AI_Eco.dat ad891f317f5c097776e014d738f17e84d2e4af7dfc7ad352f01f0d60d28025f3
+[start] OK GemmGenerality_SolutionName_AI_Eco.txt 5509bf83b23f961c17b9a60021a2be070f431835b8920f34cedeac079697b1c3
+[start] OK solutionIndexAdd_Eco.txt 3639767ab465c78e729e56850ce0ccbe2229d84f1dfaa7bb059bc8c62b43da79
+[start] OK solutionIndex_AI_Eco.txt 6ec0a9d84da70e5a2eeb0fa1dffe06c9f70feaf8defdc1d8203d9c09aa2d736c
+[start] tuned lib=/root/private_data/workspace/robo/rocblas_tuned/library_gpu4 (files=163)
+[start] ROCBLAS_TENSILE_LIBPATH=/root/private_data/workspace/robo/rocblas_tuned/library_gpu4
+[start] VLLM_ATTENTION_BACKEND=ROCM_AITER_FA
+[start] port=30000 log=/root/private_data/workspace/robo/logs/serve_graph_aiterfa_20261101-114625.log
+[start] pid=5304
 [start] READY after 230s

@@ -1,0 +1,12 @@
+run_id=fullbench_baseline_20261101_043223
+config=baseline
+port=30000
+started_at=2026-11-01T04:32:23+08:00
+tiers=16384:1:1,16384:8:1,4096:64:1
+rounds=2
+model=/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV
+git_revision=77332866358b1e41c872b9284695c5705a632b9c
+vllm_version=0.15.1
+rocblas_stock_ai_dat=be0f15afdd77d40cd3f1cdcf400b84842d1b358342e9c59e4b489a22fc4248cf
+candidate_ai_dat=ad891f317f5c097776e014d738f17e84d2e4af7dfc7ad352f01f0d60d28025f3
+candidate_add_dat=23e30c02a186d0c9a0cc851c2874752f1fc3f7fdd89ba77bf2cd5c5806324f58

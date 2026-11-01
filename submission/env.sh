@@ -72,7 +72,7 @@ export PATCH_ROOT="$(python -c 'import sysconfig; print(sysconfig.get_paths()["p
 #       （`{"image":8}` 而不是 `{"image": 8}`），否则会被拆成两个参数。
 #
 # 最优版**不再**带 --enforce-eager：启用 torch.compile + graph capture 后，
-# 4096/并发1 输出吞吐 首提 eager 21.75 → graph 基线 22.38 tok/s（+2.9%，同节点实测）。
+# 4096/并发1 输出吞吐 首提 eager 21.74 → graph 基线 22.38 tok/s（+2.9%，2026-10-31 节点同卡实测（换卡后未重跑 graph 基线，属跨卡存档））。
 # 单看 graph 的收益有限，主体收益来自 GEMM 调优库与 aiter FA（见 reports/25 §2）。
 # 2026-10-27 首次非 eager 启动曾在 inductor 编译期触顶容器 cgroup 上限被 OOM killer
 # 杀掉；当前实测启动稳定（ready_after 170~240 s），run.sh 仍保留 70 GiB 内存看门狗

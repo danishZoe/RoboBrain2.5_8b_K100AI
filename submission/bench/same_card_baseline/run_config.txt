@@ -1,0 +1,3 @@
+# non-eager 确认实验 noneager_confirm_20261031_222226
+# server: NO --enforce-eager, ctx=32768 mem_frac=0.85 max_batched=4096 max_seqs=64
+# ready_after_s=170

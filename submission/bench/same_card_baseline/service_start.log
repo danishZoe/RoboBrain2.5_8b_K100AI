@@ -1,0 +1,4 @@
+[start] mode=graph port=30000 log=/root/private_data/workspace/robo/logs/serve_graph_20261101-043234.log
+[start] pid=14017
+[start] READY after 230s  http=30000
+{"object":"list","data":[{"id":"robobrain2.5-8b-nv","object":"model","created":1793478976,"owned_by":"vllm","root":"/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV","parent":null,"max_model_len":32768,"permission":[{"id":"modelperm-a3eca42e718dce33","object":"model_permission","created":1793478976,"allow_create_engine":false,"allow_sampling":true,"allow_logprobs":true,"allow_search_indices":false,"allow_view":true,"allow_fine_tuning":false,"organization":"*","group":null,"is_blocking":false}]}]}

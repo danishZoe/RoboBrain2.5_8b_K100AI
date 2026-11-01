@@ -1,0 +1,8 @@
+[run] skip requirements-extra.txt (already installed)
+[run] note: patches/0001-vllm-qwen3-tie-word-embeddings.patch not applied in /usr/local/lib/python3.10/dist-packages; the public environment is
+        left untouched on purpose. The equivalent change is injected
+        at runtime by envs/vllm_shim/sitecustomize.py.
+[sitecustomize] Qwen3VLTextConfig.tie_word_embeddings = False
+[run] shim check: Qwen3VLTextConfig.tie_word_embeddings = False
+[run] python3 /root/private_data/workspace/robo/submission/scripts/serve_vllm_patched.py --model /public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV --served-model-name robobrain2.5-8b-nv --host 127.0.0.1 --port 30000 --tensor-parallel-size 1 --pipeline-parallel-size 1 --max-model-len 32768 --gpu-memory-utilization 0.85 --dtype bfloat16 --trust-remote-code --enforce-eager --no-enable-prefix-caching --max-num-batched-tokens 4096 --max-num-seqs 64 --limit-mm-per-prompt={"image":8}
+[run] server exited, see server.log
