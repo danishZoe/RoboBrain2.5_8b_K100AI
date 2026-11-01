@@ -72,9 +72,13 @@ core.*
 
 # 厂商 GEMM 调优工具的工作目录（4 个实例合计 8 GB+，含 Tensile 二进制与旧库副本）。
 # 可复核的关键证据（选优日志、shape 采集、算子级对比 CSV）已固化到
-# reports/evidence/gemm_tuning_20261030/；
-# 生效的候选库差异文件在 submission/rocblas_tuned/library_gpu4/。
+# reports/evidence/gemm_tuning_20261030/；生效的候选库差异文件在
+# submission/rocblas_tuned/library_gpu4/。
 tools/auto_select_tools*/
+
+# Windows 侧 PowerShell 传输残留（曾以 scripts/.ps__* 形式落在交付目录里，
+# 会被打包进交付物）。真身已按正常文件名入库，这里只做兜底忽略。
+.ps__*
 EOF
 
 if [ ! -d "$GITDIR" ]; then
