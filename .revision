@@ -1,14 +1,21 @@
 # RoboBrain2.5-8B-NV / K100AI (K500SM_AI) 交付 revision
-revision      = bf7f4e255c475dd924d8e506fb2310da320ce820
-revision_short= bf7f4e2
-recorded_at   = 2026-11-01T21:26:37+08:00
-tracked_files = 676
-manifest      = submission/MANIFEST.sha256
-repo_layout   = submission scripts tools configs samples patches reports platform
-note          = 本仓库只含交付物；envs/pylibs、cache、tmp、outputs、logs 未纳入
-                 （隔离依赖与运行产物，可由提交包脚本重新生成）。
+revision      = e0b46af2910800e73adc38a5533542635cedf323
+revision_short= e0b46af
+recorded_at   = 2026-11-01T21:58:00+08:00
+tracked_files = 379
+manifest      = MANIFEST.sha256
+repo_layout   = README.md env.sh env_check.sh requirements-extra.txt run.sh smoke.sh
+                 verify.py bench.sh reproduce.sh patches/ + env.log server.log smoke.log
+                 verify_result.json + bench/ bench_public/ bench_verify/
+                 bench_pitfall_ignore_eos/ baselines/ envs/ rocblas_tuned/ + reports/
+                 scripts/ tools/ samples/ platform/ third_party/ docs/
+note          = 仓库根 = 官方提交视图（README.md 即 8 章技术报告，9 项官方文件与原始
+                 产物均在根）。envs/pylibs、cache、tmp、outputs、logs 未纳入（隔离依赖与
+                 运行产物，可由提交包脚本重新生成）。
                  代码托管：https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai
                  本次交付配置 = 最优版：graph(非 eager) + GEMM 算子调优库 + ROCM_AITER_FA
                  换卡后所有收益结论均取自同一张卡上的三套 A/B（scripts/bench_set.py 判定）。
-                 六档官方口径表：基线 eager 与最优版均在当前卡（2026-11-01 换卡后）实测。revision_note_commit= 5f4dfa4cea63481d02fc0db0a634fa1f973b4852
-revision_note_short = 5f4dfa4
+                 六档官方口径表：基线 eager 与最优版均在当前卡（2026-11-01 换卡后）实测。
+                 重构前的完整工作区保留在 workbench 分支（e8930a6）。
+revision_note_commit= e0b46af2910800e73adc38a5533542635cedf323
+revision_note_short = e0b46af
