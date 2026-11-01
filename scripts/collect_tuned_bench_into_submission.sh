@@ -46,15 +46,17 @@ PY
 fi
 
 # 纯 shell 兜底（没有 python 时按目录名里的时间戳取全部，不看 mtime）
+# 注意：`set -o pipefail` 下，glob 无匹配时 `ls` 退出码为 2，会让整条管道非零，
+# 再叠加 `set -e` 就会**静默退出 2**。这里统一加 `|| true` 兜住。
 if [ -z "$CAND_DIR" ]; then
-  CAND_DIR="$(ls -d outputs/fullbench_candidate_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')"
+  CAND_DIR="$(ls -d outputs/fullbench_candidate_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//' || true)"
   SESSION_LABEL="未知（未做同卡判定）"
 fi
 if [ -z "$BASE_DIR" ]; then
-  BASE_DIR="$(ls -d outputs/fullbench_baseline_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')"
+  BASE_DIR="$(ls -d outputs/fullbench_baseline_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//' || true)"
 fi
 if [ -z "$EAGER_DIR" ]; then
-  EAGER_DIR="$(ls -d outputs/fullbench_eager_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')"
+  EAGER_DIR="$(ls -d outputs/fullbench_eager_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//' || true)"
 fi
 
 if [ -n "${1:-}" ]; then
