@@ -1,6 +1,6 @@
 # 隔离依赖与运行产物：不进交付仓库（体积大、可由脚本重新生成）
-envs/
-envs/*
+# 注意：根级 envs/ 是提交包的一部分（sitecustomize 垫片），只排除隔离依赖 pylibs/
+/envs/pylibs/
 cache/
 tmp/
 outputs/
@@ -19,16 +19,13 @@ third_party/RoboBrain2.5/
 *.tar.gz
 *.tgz
 *.bak*
-submission/__pycache__/
-submission/logs/
 
 # 密钥与平台本地状态
 .env
 *.token
 *.key
 
-# 运行时组装的 rocBLAS 调优库（仓库内只提交 6 个差异文件，运行时装配目录不进仓库）
-/rocblas_tuned/
+# 注：/rocblas_tuned/ 已随「最优版」上提到仓库根，成为交付资产（GEMM 选优库本体），不再忽略。
 
 # 进程崩溃转储（节点上出现过 3 GB 级 core 文件，绝不能进仓库）
 core
