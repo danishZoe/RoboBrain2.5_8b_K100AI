@@ -108,6 +108,8 @@ collect_one() {
 
 collect_many() {
   dirs="$1"; dest="$2"; title="$3"
+  # 目标目录先建出来：即使这一套没有源目录，后面写 README 也不会因目录不存在而失败
+  mkdir -p "$dest"
   IFS=',' read -ra _dl <<< "$dirs"
   for d in "${_dl[@]}"; do
     [ -n "$d" ] || continue
