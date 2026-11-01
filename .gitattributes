@@ -1,0 +1,13 @@
+# 交付目标为 Linux 节点：仓库统一以 LF 存储与检出。
+#
+# 背景：本地克隆体 core.autocrlf=true，工作区被检出成 CRLF；
+#       从工作区直接传到节点的 .sh 文件在 bash 下解析失败
+#       （实测 tools/record_revision.sh line 86: unexpected token `$'{\r''`），
+#       会让收尾流程在第 7/8 步中止、导不出交付包。
+#       这里从仓库层面钉死行尾，任何平台检出都保持 LF。
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.bash text eol=lf
+*.py text eol=lf
+*.patch text eol=lf
