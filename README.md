@@ -11,12 +11,27 @@
 > `submission/bench/`、`submission/README.md` 第 7 节、`env.log` / `smoke.log` /
 > `verify_result.json`，并跑一次提交包自检（`tools/check_submission.sh`）。
 
+> **代码托管（2026-10-31 起）**：
+> `ssh://git@developer.sourcefind.cn:2222/g_exhyd6h6/robobrain2.5_8b_k100ai.git`
+> （网页 <https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai>）。
+> `main` = **最优版**（graph + GEMM 调优库 + aiter FA）；
+> 标签 `baseline-submission` = **首提基线**（eager），两者对照见
+> `reports/25_tuning_delivery_20261031.md` 与 `reports/tuning_comparison.md`。
+>
+> **换卡口径（2026-11-01）**：SCNet 容器被平台回收重建后**物理卡会更换**，
+> 跨卡绝对值不可比（同配置跨卡可差约 30%）。仓库里的压测工具链已把「同一张卡」
+> 做成硬约束：`scripts/card_identity.sh` 采集卡指纹 → `scripts/run_full_bench.sh`
+> 把 `card_id` 写进 `run_config.txt` → `scripts/bench_set.py` 判定同卡，
+> `scripts/run_same_card_bench.sh` 在同一张卡上连跑 eager / graph 基线 / 最优版。
+> **只有同一张卡上的两个数才允许相减。**
+
 ---
 
 ## 1. 先看哪几份
 
 | 顺序 | 文件 | 内容 |
 |---|---|---|
+| 0 | `reports/25_tuning_delivery_20261031.md` | **最优版交付报告**：最终配置（graph + GEMM 调优库 + aiter FA）、完整六档压测、与首提基线/graph 基线的**同卡**对比、组装与生效证据、回退方法 |
 | 1 | `submission/README.md` | **正式提交报告**（官方模板八章）：环境、适配方案、启动脚本、Smoke、精度、性能、注意事项 |
 | 2 | `reports/05_final.md` | 总览与索引：是否跑通、任务范围、一条可复现命令、优化前后同口径指标、尚存限制 |
 | 3 | `reports/10_phase5_bench.md` | 阶段 5 冒烟 + 官方六档压测（含两处口径错误的根因与修正） |
@@ -53,6 +68,11 @@
 | `19_a800_cross_validation.md` | A800↔DCU CV-Bench 全量对照（Δ0.1pt，一致率 99.6%） |
 | `20_extended_bench_results.md` | **扩展 7 基准结果**（论文 Table 2/3 补齐 + TraceSpatial 病态样本根因勘误） |
 | `21_a800_extbench_crossval.md` | **A800 交叉验证**：Q-Spatial/RoboSpatial 跨硬件对照 |
+| `22_gemm_tuning.md` | GEMM 算子调优专项：shape 采集、选优、算子级对比、库生效验证 |
+| `23_tuning_progress_20261030.md` | graph 基线之后的第一轮调优台账（E5–E9 采纳与否决） |
+| `24_prompt_retune_timing_20261030.md` | 提示词冻结后的精简调优流程与实际耗时（50 分 26 秒） |
+| `25_tuning_delivery_20261031.md` | **最优版交付**：最终配置、六档完整压测、**同卡**基线对比、组装与生效证据、回退与限制 |
+| `tuning_comparison.md` | 调优对比表（首提基线 / graph 基线 / 最优版，逐档 + **同卡** A/B + 跨卡存档） |
 | `bench_summary_custom.md` | 自有压测客户端结果 + 与官方客户端交叉验证 |
 
 ## 3. 目录
