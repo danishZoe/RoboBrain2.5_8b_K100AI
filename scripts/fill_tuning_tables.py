@@ -264,7 +264,29 @@ def main():
 
     official = fmt_official(cand)
     rounds = fmt_rounds(cand)
-    ab = fmt_ab(base, cand, "graph 基线", "最优版") if base else NOT_MEASURED
+
+    # --- 归因（graph → 最优版）必须同卡 ---------------------------------------
+    # 换卡后若没在新卡上补跑 graph 基线，graph 基线落在历史会话里，
+    # 此时**不能**拿历史会话的 graph 去减当前卡的最优版（跨卡相减）。
+    # 正确做法：归因整段改用 graph 基线所在会话自己的三套数据，并在表头标注。
+    _sessions = bench_set.sessions()
+
+    def _rows(label, cfg):
+        for lbl, cfgmap in _sessions:
+            if lbl == label and cfg in cfgmap:
+                return bench_set.load_dirs(cfgmap[cfg])
+        return {}
+
+    attr_label = cand_label if base_label == cand_label else base_label
+    attr_cand = _rows(attr_label, "candidate") or cand
+    attr_graph = _rows(attr_label, "baseline") or base
+    if attr_label == cand_label:
+        ab_base_label, ab_cand_label = "graph 基线", "最优版"
+    else:
+        ab_base_label = "graph 基线（2026-10-31 节点存档）"
+        ab_cand_label = "最优版（2026-10-31 节点存档）"
+
+    ab = fmt_ab(attr_graph, attr_cand, ab_base_label, ab_cand_label) if attr_graph else NOT_MEASURED
     ab_eager = fmt_ab(first, cand, "首提基线 eager", "最优版") if first else NOT_MEASURED
 
     full_block = "\n".join([

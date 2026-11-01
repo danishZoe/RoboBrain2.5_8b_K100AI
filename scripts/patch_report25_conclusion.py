@@ -31,6 +31,18 @@ import bench_set  # noqa: E402
 WS = bench_set.WS
 ORDER = bench_set.ORDER
 TIER_NAME = bench_set.TIER_NAME
+LEGACY_LABEL = bench_set.LEGACY_LABEL
+
+
+def replace_marker(text: str, name: str, body: str) -> str:
+    """在成对标记之间替换正文（标记本身保留，脚本可重复执行）。"""
+    begin = f"<!-- {name}:BEGIN -->"
+    end = f"<!-- {name}:END -->"
+    if begin not in text or end not in text:
+        raise SystemExit(f"ERROR: marker pair not found: {name}")
+    pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
+    block = f"{begin}\n{body}\n{end}"
+    return pat.sub(lambda _m: block, text, count=1)
 
 # 跨卡存档（历史实验，永不参与同卡相减）
 ARCHIVE_FIRST = ["submission/bench/round1.jsonl", "submission/bench/round2.jsonl"]
@@ -158,8 +170,33 @@ def main():
     if not eager:
         print("[patch] WARN: 当前卡上没有同卡首提基线数据，§1 赛事口径对比行将标注未测")
 
-    d_graph = deltas(gbase, cand)
-    d_eager = deltas(eager, cand)
+    # --- 归因必须三套同卡 ---------------------------------------------------
+    # 换卡后若没在新卡上补跑 graph 基线，graph 基线会落在历史会话里。此时
+    # **绝不能**拿历史会话的 graph 去减当前卡的最优版 —— 那是跨卡相减，
+    # 正是换卡后最容易产生的错误结论。正确做法：归因整段改用 graph 基线
+    # 所在会话自己的三套数据（同一张卡），并把该会话标签写进结论文字。
+    _sessions = bench_set.sessions()
+
+    def _rows(label, cfg):
+        for lbl, cfgmap in _sessions:
+            if lbl == label and cfg in cfgmap:
+                return bench_set.load_dirs(cfgmap[cfg])
+        return {}
+
+    attr_label = cand_label if base_label == cand_label else base_label
+    attr_cand = _rows(attr_label, "candidate") or cand
+    attr_eager = _rows(attr_label, "eager")
+    attr_graph = _rows(attr_label, "baseline") or gbase
+    if attr_label == cand_label:
+        attr_note = "同卡同轮实测"
+        print(f"[patch] 归因会话 = {attr_label}（同卡三套齐全）")
+    else:
+        attr_note = "2026-10-31 节点同卡实测（换卡后未重跑 graph 基线，属跨卡存档）"
+        print(f"[patch] 归因会话 = {attr_label}（当前卡未补跑 graph 基线，归因整段用该会话三套数据）")
+
+    d_graph = deltas(attr_graph, attr_cand)        # 归因：graph → 最优版（同卡）
+    d_eager_attr = deltas(attr_eager, attr_cand)  # 归因：eager → 最优版（同卡）
+    d_eager = deltas(eager, cand)                 # 主体结论：当前卡 eager → 最优版（同卡）
 
     tiers_g = [t for t in ORDER if t in d_graph]
     tiers_e = [t for t in ORDER if t in d_eager]
@@ -177,7 +214,7 @@ def main():
 
     if tiers_g:
         row_graph = (f"| 相对 graph 基线 | {pick(d_graph, tiers_g)}"
-                     f"（{base_label}，同卡同轮实测，见 §5.2） |")
+                     f"（{attr_note}，见 §5.2） |")
     else:
         row_graph = "| 相对 graph 基线 | **未测**（当前卡上没有同卡 graph 基线数据） |"
     if tiers_e:
@@ -189,19 +226,22 @@ def main():
     txt = replace_row(txt, r"^\| 相对首提 eager 基线 \|.*$", row_eager, "§1 首提基线行")
 
     # §2 差异表「依据」列：按实测重写归因
+    # 注意：eager→graph 这一步必须用**归因会话自己的** eager，
+    # 不能拿当前卡的 eager 去减历史会话的 graph（跨卡相减）。
     g41 = d_graph.get((4096, 1))
     e41 = d_eager.get((4096, 1))
+    e41_attr = d_eager_attr.get((4096, 1))
     g48 = d_graph.get((4096, 8))
 
-    if e41 and g41:
-        eff = (g41[0] / e41[0] - 1) * 100
-        c1_basis = (f"graph（torch.compile + graph capture）：同卡 4096/并发1 "
-                    f"首提 eager {e41[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s（{eff:+.1f}%），"
+    if e41_attr and g41:
+        eff = (g41[0] / e41_attr[0] - 1) * 100
+        c1_basis = (f"graph（torch.compile + graph capture）：{attr_note}，"
+                    f"4096/并发1 首提 eager {e41_attr[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s（{eff:+.1f}%），"
                     f"单项收益有限；叠加调优库与 aiter FA 后到 {g41[1]:.2f} tok/s，"
                     f"主体收益来自第 2、3 项")
     elif g41:
-        c1_basis = (f"graph（torch.compile + graph capture）：同卡 4096/并发1 "
-                    f"graph 基线 {g41[0]:.2f} → 最优版 {g41[1]:.2f} tok/s（{g41[2]}）；"
+        c1_basis = (f"graph（torch.compile + graph capture）：{attr_note}，"
+                    f"4096/并发1 graph 基线 {g41[0]:.2f} → 最优版 {g41[1]:.2f} tok/s（{g41[2]}）；"
                     f"同卡 eager 基线未测，graph 自身收益未能单独隔离")
     else:
         c1_basis = "graph（torch.compile + graph capture），收益见 §5.2 同卡 A/B"
@@ -231,16 +271,56 @@ def main():
     rp.write_text(txt, encoding="utf-8")
     print(f"[patch] updated {rp}")
 
+    # ------------------------------- §6 卡片等效性对照表（由实测数据生成）-------
+    # 换卡后要回答「旧卡的结论能不能沿用」，靠的是**同配置跨卡对照**：
+    # 同一个最优版配置在两张卡上各测一遍，看绝对值差多少。这是**验证手段**，
+    # 收益结论本身仍然只用同卡相减。
+    legacy_cand = _rows(LEGACY_LABEL, "candidate")
+    legacy_graph = _rows(LEGACY_LABEL, "baseline")
+    if legacy_cand and cand:
+        equiv_rows = []
+        for t in ORDER:
+            cur = list(cand.get(t) or [])
+            old = list(legacy_cand.get(t) or [])
+            if not cur or not old:
+                continue
+            o = sum(float(r.get("output_throughput") or 0) for r in old) / len(old)
+            n = sum(float(r.get("output_throughput") or 0) for r in cur) / len(cur)
+            if o <= 0:
+                continue
+            equiv_rows.append((t, o, n, (n - o) / o * 100))
+        if equiv_rows:
+            lines = [
+                "| 档位 | 旧卡最优版（10-31 节点） | 新卡最优版（11-01 换卡后） | 偏差 |",
+                "| --- | ---: | ---: | ---: |",
+            ]
+            for t, o, n, dev in equiv_rows:
+                lines.append(f"| {TIER_NAME[t]} | {o:.2f} tok/s | {n:.2f} tok/s | {dev:+.2f}% |")
+            mx = max(abs(d) for _, _, _, d in equiv_rows)
+            lines.append("")
+            lines.append(
+                f"最大偏差 **{mx:.2f}%**（{len(equiv_rows)} 个档位）。"
+                + ("两卡性能等价，旧卡数据可作为新卡结论的佐证；**收益结论仍只用同卡相减**。"
+                   if mx <= 5 else
+                   "偏差超过 5%，旧卡数据只能作历史存档，不得用于新卡结论。"))
+            block = "\n".join(lines)
+            txt = rp.read_text(encoding="utf-8")
+            txt = replace_marker(txt, "CARD_EQUIV_TABLE", block)
+            rp.write_text(txt, encoding="utf-8")
+            print(f"[patch] updated {rp} (§6 卡片等效性对照表，{len(equiv_rows)} 档)")
+        else:
+            print("[patch] WARN: 无可比档位，§6 卡片等效性对照表未生成")
+
     # --------------------------------------------------------- submission/README
     sp = WS / "submission/README.md"
     txt = sp.read_text(encoding="utf-8")
-    if e41 and g41:
-        eff = (g41[0] / e41[0] - 1) * 100
-        readme_c1 = (f"启用 torch.compile + graph capture（同卡 4096/并发1 "
-                     f"首提 eager {e41[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s，{eff:+.1f}%；"
+    if e41_attr and g41:
+        eff = (g41[0] / e41_attr[0] - 1) * 100
+        readme_c1 = (f"启用 torch.compile + graph capture（{attr_note}，4096/并发1 "
+                     f"首提 eager {e41_attr[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s，{eff:+.1f}%；"
                      f"单项收益有限，主体收益来自 GEMM 调优库与 aiter FA）")
     elif g41:
-        readme_c1 = (f"启用 torch.compile + graph capture（同卡 4096/并发1 "
+        readme_c1 = (f"启用 torch.compile + graph capture（{attr_note}，4096/并发1 "
                      f"graph 基线 {g41[0]:.2f} → 最优版 {g41[1]:.2f} tok/s，{g41[2]}）")
     else:
         readme_c1 = "启用 torch.compile + graph capture（收益见 ../reports/25 §5.2）"
@@ -258,11 +338,11 @@ def main():
     # ------------------------------------------------------------- env.sh 注释
     ep = WS / "submission/env.sh"
     txt = ep.read_text(encoding="utf-8")
-    if e41 and g41:
-        eff = (g41[0] / e41[0] - 1) * 100
+    if e41_attr and g41:
+        eff = (g41[0] / e41_attr[0] - 1) * 100
         env_comment = (f"# 最优版**不再**带 --enforce-eager：启用 torch.compile + graph capture 后，\n"
-                       f"# 4096/并发1 输出吞吐 首提 eager {e41[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s"
-                       f"（{eff:+.1f}%，同卡实测）。\n"
+                       f"# 4096/并发1 输出吞吐 首提 eager {e41_attr[0]:.2f} → graph 基线 {g41[0]:.2f} tok/s"
+                       f"（{eff:+.1f}%，{attr_note}）。\n"
                        f"# 单看 graph 的收益有限，主体收益来自 GEMM 调优库与 aiter FA（见 reports/25 §2）。")
         txt = re.sub(r"# 最优版\*\*不再\*\*带 --enforce-eager：.*?# 作为保护。",
                      env_comment.replace("\\", "\\\\") + "\n# 2026-10-27 首次非 eager 启动曾在 inductor 编译期触顶容器 cgroup 上限被 OOM killer\n"
@@ -285,7 +365,7 @@ def main():
         "",
         official_table(cand),
         "",
-        f"> 原始数据 `outputs/{Path(cand_dir).name}/`，"
+        f"> 原始数据 " + "、".join(f"`outputs/{Path(d).name}/`" for d in cand_dirs) + "，"
         "对比与逐轮波动见 `reports/25_tuning_delivery_20261031.md` §4 与 `reports/tuning_comparison.md`。",
         "<!-- BEST_BENCH_TABLE:END -->",
     ])
