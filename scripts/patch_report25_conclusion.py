@@ -123,7 +123,8 @@ def replace_row(text: str, prefix_regex: str, new_row: str, label: str) -> str:
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--run-dir", type=Path, default=None, help="最优版运行目录（默认取同卡最新一份）")
+    ap.add_argument("--run-dir", default="",
+                    help="最优版运行目录（逗号分隔，可多个；默认取同卡全部服务实例并按档位合并）")
     ap.add_argument("--baseline-dirs", default="", help="graph 基线目录（逗号分隔）")
     ap.add_argument("--first-dirs", default="", help="首提基线 eager 目录（逗号分隔）")
     ap.add_argument("--node-label", default=os.environ.get("BENCH_NODE_LABEL", "当前节点（同一张卡）"))
@@ -132,8 +133,11 @@ def main():
     card = bench_set.current_card_id()
 
     if args.run_dir:
-        cand_dirs = [args.run_dir]
-        cand_dir, cand_label = args.run_dir, args.node_label
+        # 同一配置被拆成多次服务实例跑时，--run-dir 允许逗号分隔的多个目录，
+        # 全部参与按档位合并（只取一个目录会漏掉单独跑的重档）。
+        cand_dirs = [Path(p) for p in str(args.run_dir).split(",") if p.strip()]
+        cand_dir = cand_dirs[0] if cand_dirs else None
+        cand_label = args.node_label
     else:
         cand_label, cand_dirs = bench_set.pick_single("candidate")
         cand_dir = cand_dirs[0] if cand_dirs else None

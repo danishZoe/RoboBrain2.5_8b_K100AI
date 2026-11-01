@@ -38,30 +38,43 @@ label_c, cand = bench_set.pick_single("candidate")
 label_b, base, _ = bench_set.pick_pair("baseline", "candidate")
 label_e, eager, _ = bench_set.pick_pair("eager", "candidate")
 print("SESSION_LABEL=" + shlex.quote(str(label_c)))
-print("CAND_DIR=" + shlex.quote(str(cand[0]) if cand else ""))
-print("BASE_DIR=" + shlex.quote(str(base[0]) if base else ""))
-print("EAGER_DIR=" + shlex.quote(str(eager[0]) if eager else ""))
+print("CAND_DIR=" + shlex.quote(",".join(str(d) for d in cand)))
+print("BASE_DIR=" + shlex.quote(",".join(str(d) for d in base)))
+print("EAGER_DIR=" + shlex.quote(",".join(str(d) for d in eager)))
 PY
 )"
 fi
 
-# 纯 shell 兜底（没有 python 时按目录名里的时间戳取最新一份，不看 mtime）
+# 纯 shell 兜底（没有 python 时按目录名里的时间戳取全部，不看 mtime）
 if [ -z "$CAND_DIR" ]; then
-  CAND_DIR="$(ls -d outputs/fullbench_candidate_* 2>/dev/null | sort -r | head -1)"
+  CAND_DIR="$(ls -d outputs/fullbench_candidate_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')"
   SESSION_LABEL="未知（未做同卡判定）"
 fi
 if [ -z "$BASE_DIR" ]; then
-  BASE_DIR="$(ls -d outputs/fullbench_baseline_* 2>/dev/null | sort -r | head -1)"
+  BASE_DIR="$(ls -d outputs/fullbench_baseline_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')"
 fi
 if [ -z "$EAGER_DIR" ]; then
-  EAGER_DIR="$(ls -d outputs/fullbench_eager_* 2>/dev/null | sort -r | head -1)"
+  EAGER_DIR="$(ls -d outputs/fullbench_eager_* 2>/dev/null | sort | tr '\n' ',' | sed 's/,$//')"
 fi
 
 if [ -n "${1:-}" ]; then
   CAND_DIR="$1"
 fi
-if [ -z "$CAND_DIR" ] || [ ! -d "$CAND_DIR" ]; then
-  echo "ERROR: 找不到最优版压测目录（CAND_DIR=${CAND_DIR:-空}）" >&2
+
+# --- 目录清单校验（逗号分隔，可能有多个服务实例目录）---------------------------
+CAND_DIRS=""
+IFS=',' read -ra _cd <<< "$CAND_DIR"
+for d in "${_cd[@]}"; do
+  [ -n "$d" ] || continue
+  if [ ! -d "$d" ]; then
+    echo "ERROR: 找不到最优版压测目录（$d）" >&2
+    exit 1
+  fi
+  CAND_DIRS="${CAND_DIRS:+$CAND_DIRS,}$d"
+done
+CAND_DIR="$CAND_DIRS"
+if [ -z "$CAND_DIR" ]; then
+  echo "ERROR: 找不到最优版压测目录（CAND_DIR 为空）" >&2
   exit 1
 fi
 
@@ -75,19 +88,34 @@ collect_one() {
   [ -n "$src" ] || return 0
   [ -d "$src" ] || return 0
   mkdir -p "$dest"
-  cp -f "$src"/round*.jsonl "$dest"/ 2>/dev/null || true
-  cp -f "$src"/round*.log "$dest"/ 2>/dev/null || true
-  cp -f "$src"/run_config.txt "$dest"/ 2>/dev/null || true
-  cp -f "$src"/service_start.log "$dest"/ 2>/dev/null || true
-  cp -f "$src"/worker_env.txt "$dest"/ 2>/dev/null || true
-  [ -f "$src/summary.md" ] && cp -f "$src/summary.md" "$dest/summary.md"
-  [ -f "$src/agreement.md" ] && cp -f "$src/agreement.md" "$dest/agreement.md"
-  echo "[collect]   $title ← $src （$(ls -1 "$dest" | wc -l) 个文件）"
+  tag="$(basename "$src")"
+  # 同一配置可能被拆成多次服务实例跑，多个目录里可能有同名文件：
+  # 内容一致就跳过；内容不同则用「目录名__原名」保留，绝不静默覆盖。
+  for f in "$src"/round*.jsonl "$src"/round*.log "$src"/run_config.txt \
+           "$src"/service_start.log "$src"/worker_env.txt \
+           "$src"/summary.md "$src"/agreement.md; do
+    [ -f "$f" ] || continue
+    b="$(basename "$f")"
+    if [ -f "$dest/$b" ] && ! cmp -s "$f" "$dest/$b"; then
+      b="${tag}__${b}"
+    fi
+    cp -f "$f" "$dest/$b" 2>/dev/null || true
+  done
+  echo "[collect]   $title ← $src （$dest 现有 $(ls -1 "$dest" | wc -l) 个文件）"
 }
 
-collect_one "$CAND_DIR" "submission/bench/tuned" "最优版"
-collect_one "$BASE_DIR" "submission/bench/same_card_baseline" "graph 基线"
-collect_one "$EAGER_DIR" "submission/bench/same_card_eager" "首提基线 eager"
+collect_many() {
+  dirs="$1"; dest="$2"; title="$3"
+  IFS=',' read -ra _dl <<< "$dirs"
+  for d in "${_dl[@]}"; do
+    [ -n "$d" ] || continue
+    collect_one "$d" "$dest" "$title"
+  done
+}
+
+collect_many "$CAND_DIR" "submission/bench/tuned" "最优版"
+collect_many "$BASE_DIR" "submission/bench/same_card_baseline" "graph 基线"
+collect_many "$EAGER_DIR" "submission/bench/same_card_eager" "首提基线 eager"
 
 CARD_ID_LINE=""
 if [ -f outputs/CARD_ID.txt ]; then
@@ -131,6 +159,10 @@ BF16 / TP=1 / \`--gpu-memory-utilization 0.85 --max-model-len 32768\` /
 
 > ⚠️ **跨节点的绝对值不可直接比较**。容器被平台回收重建后物理卡会更换，
 > 收益结论一律用**同一张卡**上三套配置的 A/B（判定见 \`../../scripts/bench_set.py\`）。
+
+> 同一配置若被拆到**多个服务实例**跑（例如 16384/并发64 这类单轮约 3.8 h 的重档
+> 单独起一次服务），本目录会同时保留各次的 \`round*.jsonl\`；
+> 同名但内容不同的文件以「运行目录名__原名」保存，**绝不静默覆盖**。
 EOF
 
 cat > submission/bench/same_card_eager/README.md <<EOF

@@ -51,13 +51,15 @@ echo "card_gfx=${CARD_GFX:-}"
 echo "node_host=${CARD_HOST:-}"
 if [ "$CAND_DIR_PINNED" = "0" ]; then
   # 按「同一张卡」解析最优版运行目录与所属会话（scripts/bench_set.py）
+  # 同一配置可能被拆到多次服务实例跑（重档单独一轮），这里取**全部**同卡目录，
+  # 逗号分隔后一路传下去，由报告脚本按档位合并。
   RESOLVED="$(python3 -c "
 import sys
 sys.path.insert(0, '$WS/scripts')
 import bench_set
 label, dirs = bench_set.pick_single('candidate')
 print(label)
-print(str(dirs[0]) if dirs else '')
+print(','.join(str(d) for d in dirs))
 " 2>/dev/null || true)"
   SESSION_LABEL="$(printf '%s\n' "$RESOLVED" | sed -n '1p')"
   CAND_DIR="$(printf '%s\n' "$RESOLVED" | sed -n '2p')"
@@ -65,7 +67,21 @@ print(str(dirs[0]) if dirs else '')
 fi
 echo "session_label=${BENCH_NODE_LABEL:-当前节点（同一张卡）}"
 echo "candidate_run_dir=${CAND_DIR:-（未解析到）}"
-ls -d "$CAND_DIR" 2>/dev/null || { echo "ERROR: 候选压测目录不存在：${CAND_DIR:-（未解析到）}" >&2; exit 1; }
+# 每个目录都必须真实存在，否则中止（避免报告引用不存在的目录）
+CAND_DIR_OK=0
+IFS=',' read -ra _cd <<< "${CAND_DIR:-}"
+for d in "${_cd[@]}"; do
+  [ -n "$d" ] || continue
+  if [ ! -d "$d" ]; then
+    echo "ERROR: 候选压测目录不存在：$d" >&2
+    exit 1
+  fi
+  CAND_DIR_OK=1
+done
+if [ "$CAND_DIR_OK" != "1" ]; then
+  echo "ERROR: 候选压测目录不存在：${CAND_DIR:-（未解析到）}" >&2
+  exit 1
+fi
 
 step "1/8 回填压测表（reports/25 §4/§5.2/§5.3、submission/README §7）"
 if [ "$CAND_DIR_PINNED" = "1" ]; then
