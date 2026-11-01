@@ -117,6 +117,21 @@ collect_many "$CAND_DIR" "submission/bench/tuned" "最优版"
 collect_many "$BASE_DIR" "submission/bench/same_card_baseline" "graph 基线"
 collect_many "$EAGER_DIR" "submission/bench/same_card_eager" "首提基线 eager"
 
+# --- 干净环境复现产物（验收标准 §7.2 / 报告 §4.5）---------------------------
+# logs/ 被 .gitignore 排除，不归档就会随节点回收一起消失，故显式收进提交包。
+CR_SRC="logs/clean_repro_full/clean_repro_full_20261031"
+if [ -d "$CR_SRC" ]; then
+  CR_DST="submission/bench/clean_repro"
+  mkdir -p "$CR_DST/bench"
+  for f in "$CR_SRC"/*.log "$CR_SRC"/run_config.txt "$CR_SRC"/verify_result.json; do
+    [ -f "$f" ] && cp -f "$f" "$CR_DST/" 2>/dev/null || true
+  done
+  cp -f "$CR_SRC"/bench/*.jsonl "$CR_SRC"/bench/*.log "$CR_DST/bench/" 2>/dev/null || true
+  echo "[collect] 干净复现产物 ← $CR_SRC （$CR_DST 现有 $(find "$CR_DST" -type f | wc -l) 个文件）"
+else
+  echo "[collect] 未找到干净复现目录 $CR_SRC（跳过，不影响其它产物）"
+fi
+
 CARD_ID_LINE=""
 if [ -f outputs/CARD_ID.txt ]; then
   CARD_ID_LINE="$(grep -m1 '^card_id=' outputs/CARD_ID.txt 2>/dev/null || true)"
