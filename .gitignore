@@ -18,8 +18,7 @@ third_party/RoboBrain2.5/
 # 生成的快照与压缩包
 *.tar.gz
 *.tgz
-*.bak_*
-*.bak-*
+*.bak*
 submission/__pycache__/
 submission/logs/
 
