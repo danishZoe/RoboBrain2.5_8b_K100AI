@@ -110,7 +110,8 @@ echo "OK: reports/tuning_comparison.md"
 step "6/8 清理一次性打补丁脚本（移到 gitignore 的 tmp/，可恢复）"
 mkdir -p tmp/discarded_patchers
 for f in submission/scripts/patch_run_sh.py tools/patch_check_submission.py \
-         tools/patch_gitignore.py tools/patch_gitignore2.py; do
+         tools/patch_gitignore.py tools/patch_gitignore2.py \
+         tools/patch_report25_limits.py; do
   if [ -f "$f" ]; then
     mv -f "$f" tmp/discarded_patchers/ && echo "  moved: $f"
   fi
