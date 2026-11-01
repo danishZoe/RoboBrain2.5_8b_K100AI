@@ -85,7 +85,7 @@ BENCH_MODE=image bash bench.sh          # 性能测试 → bench/
 | `scripts/` `tools/` | 复现与核验工具链（压测、同卡判定、报告注入、提交包自检） |
 | `samples/` `platform/` `third_party/` | 固定样例与校验值、平台截图位（待补）、上游推理示例与许可 |
 | `docs/` | **归档**：工作区索引 `WORKSPACE_INDEX.md`、被裁下的一次性调试探针与样例叠加图 |
-| `MANIFEST.sha256` | 提交物逐文件 sha256（174 条），用于防篡改核验 |
+| `MANIFEST.sha256` | 提交物逐文件 sha256（173 条），用于防篡改核验 |
 
 > **裁剪说明**：`scripts/` 与 `tools/` 中的一次性调试探针（`probe*` / `diag*` / `show*` /
 > `peek*` / `dump*` 等，共 250 余个）已从主干移出，完整版本保留在归档分支 `workbench`
