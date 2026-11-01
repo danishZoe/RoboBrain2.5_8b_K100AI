@@ -120,6 +120,7 @@ def main():
     card = bench_set.current_card_id()
 
     if args.run_dir:
+        cand_dirs = [args.run_dir]
         cand_dir, cand_label = args.run_dir, args.node_label
     else:
         cand_label, cand_dirs = bench_set.pick_single("candidate")
@@ -140,12 +141,13 @@ def main():
     if cand_dir is None:
         raise SystemExit("ERROR: 找不到最优版运行目录（同卡或显式 --run-dir）")
 
-    cand = bench_set.load_rows(cand_dir)
+    # 同一配置被拆成多次服务实例跑时，按档位合并全部同卡目录
+    cand = bench_set.load_dirs(cand_dirs)
     gbase = bench_set.load_dirs(base_dirs)
     eager = bench_set.load_dirs(first_dirs)
 
     print(f"[patch] card_id       : {card or '（未知）'}")
-    print(f"[patch] candidate     : {cand_dir}  [{cand_label}]")
+    print(f"[patch] candidate     : {[str(d) for d in cand_dirs]}  [{cand_label}]")
     print(f"[patch] baseline dirs : {[str(d) for d in base_dirs]}  [{base_label}]")
     print(f"[patch] eager dirs    : {[str(d) for d in first_dirs]}  [{first_label}]")
 

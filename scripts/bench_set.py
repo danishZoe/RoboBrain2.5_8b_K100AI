@@ -137,6 +137,20 @@ def resolve(config, card_id=None):
     return same, other
 
 
+def resolve_all(config, card_id=None):
+    """某配置在指定卡上的**全部**运行目录（按目录名时间戳升序）。
+
+    为什么需要「全部」：单档耗时可能很长（例如 16384/并发64 单轮约 3.8 h），
+    实务上会把便宜档与重档**分两次服务实例**跑。此时同一张卡上同一配置有多个目录，
+    报告必须把它们合并（按档位聚合），而不是只取最新那一个。
+    """
+    if card_id is None:
+        card_id = current_card_id()
+    if not card_id:
+        return []
+    return [d for d in list_runs(config) if run_card_id(d) == card_id]
+
+
 def sessions():
     """返回 [(会话标签, {配置: [目录...]})]，第一个是当前卡（若有）。"""
     out = []
@@ -144,9 +158,9 @@ def sessions():
     if card:
         cur = {}
         for cfg in ("eager", "baseline", "candidate"):
-            d, _ = resolve(cfg, card)
-            if d:
-                cur[cfg] = [d]
+            dirs = resolve_all(cfg, card)
+            if dirs:
+                cur[cfg] = dirs
         if cur:
             out.append(("当前节点（同一张卡）", cur))
     legacy = {}
@@ -172,12 +186,16 @@ def pick_pair(cfg_a, cfg_b):
 
 
 def pick_single(cfg):
-    """取某个配置在「当前卡」上最新的一份；没有则回退到历史同节点会话。"""
+    """取某个配置在「当前卡」上的**全部**运行目录；没有则回退到历史同节点会话。
+
+    返回多个目录是因为同一配置可能被拆成多次服务实例跑（见 resolve_all），
+    调用方需用 load_dirs 合并，而不是只取 [0]。
+    """
     card = current_card_id()
     if card:
-        d, _ = resolve(cfg, card)
-        if d:
-            return "当前节点（同一张卡）", [d]
+        dirs = resolve_all(cfg, card)
+        if dirs:
+            return "当前节点（同一张卡）", dirs
     for label, cfgmap in sessions():
         if cfg in cfgmap:
             return label, cfgmap[cfg]

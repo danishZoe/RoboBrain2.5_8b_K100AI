@@ -207,6 +207,7 @@ def resolve_dirs(args):
     card = bench_set.current_card_id()
 
     if args.run_dir:
+        cand_dirs = [args.run_dir]
         cand_dir, cand_label = args.run_dir, args.node_label
     else:
         cand_label, cand_dirs = bench_set.pick_single("candidate")
@@ -224,7 +225,7 @@ def resolve_dirs(args):
     else:
         first_label, first_dirs, _ = bench_set.pick_pair("eager", "candidate")
 
-    return cand_dir, cand_label, base_dirs, base_label, first_dirs, first_label, card
+    return cand_dir, cand_label, cand_dirs, base_dirs, base_label, first_dirs, first_label, card
 
 
 def main():
@@ -237,17 +238,21 @@ def main():
     ap.add_argument("--node-label", default=os.environ.get("BENCH_NODE_LABEL", "当前节点（同一张卡）"))
     args = ap.parse_args()
 
-    cand_dir, cand_label, base_dirs, base_label, first_dirs, first_label, card = resolve_dirs(args)
+    cand_dir, cand_label, cand_dirs, base_dirs, base_label, first_dirs, first_label, card = resolve_dirs(args)
     if cand_dir is None:
         raise SystemExit("ERROR: 找不到最优版运行目录（同卡或显式 --run-dir）")
     print(f"[fill] card_id      : {card or '（未知）'}")
-    print(f"[fill] candidate    : {cand_dir}  [{cand_label}]")
+    print(f"[fill] candidate    : {[str(d) for d in cand_dirs]}  [{cand_label}]")
     print(f"[fill] baseline dirs: {[str(d) for d in base_dirs]}  [{base_label}]")
     print(f"[fill] eager dirs   : {[str(d) for d in first_dirs]}  [{first_label}]")
 
-    cand = load_dir(cand_dir)
+    # 同一配置可能被拆成多次服务实例跑（重档单独一轮），按档位合并全部目录
+    cand = {}
+    for d in cand_dirs:
+        for k, v in load_dir(d).items():
+            cand.setdefault(k, []).extend(v)
     if not cand:
-        raise SystemExit(f"ERROR: no result rows in {cand_dir}")
+        raise SystemExit(f"ERROR: no result rows in {cand_dirs}")
     base = {}
     for d in base_dirs:
         for k, v in load_dir(d).items():
@@ -272,7 +277,8 @@ def main():
         "",
         rounds,
         "",
-        f"> 原始数据：`outputs/{Path(cand_dir).name}/`（每档 `round*.jsonl` 与同名 `.log`）；",
+        f"> 原始数据：" + "、".join(f"`outputs/{Path(d).name}/`" for d in cand_dirs) +
+        "（每档 `round*.jsonl` 与同名 `.log`；重档单独起服务实例时按档位合并）；",
         "> 驱动脚本 `scripts/run_full_bench.sh`，汇总 `scripts/summarize_full_bench.py`。",
         "> 本次运行的卡指纹见该目录 `run_config.txt` 的 `card_id=`；",
         "> **跨节点的绝对值不可直接比较**（容器重建会换卡），见 §6 换卡说明。",
