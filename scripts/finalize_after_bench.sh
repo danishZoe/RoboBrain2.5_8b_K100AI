@@ -80,39 +80,44 @@ TARBALL="$WS/tmp/publish_final.tar.gz"
     echo "$d  jsonl=$(ls -1 "$d"/*.jsonl 2>/dev/null | wc -l)  card_id=${cid:-无}"
   done
   echo ""
-  echo "=== 最优版各档输出吞吐（tok/s）==="
-  CAND=$(ls -d outputs/fullbench_candidate_* 2>/dev/null | sort -r | head -1)
-  for f in "$CAND"/round*.jsonl; do
-    [ -f "$f" ] || continue
-    python3 - "$f" <<'PY'
-import json, sys
+  # 按**同卡 + 全部服务实例**汇总（单档耗时长时会被拆到多次服务实例，
+  # 只看最新目录会漏档）。口径与报告脚本 bench_set.py 完全一致。
+  python3 - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
 try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
-        r = json.loads(fh.readline())
-    print(f"  {sys.argv[1].split('/')[-1]}: tp={r.get('output_throughput')} "
-          f"ttft={r.get('mean_ttft_ms')} tpot={r.get('mean_tpot_ms')} "
-          f"completed={r.get('completed')} failed={r.get('failed')}")
+    import bench_set
 except Exception as e:
-    print("  读取失败:", sys.argv[1], e)
+    print("  bench_set 导入失败:", e)
+    raise SystemExit(0)
+
+for cfg, label in (("candidate", "最优版"), ("eager", "首提基线 eager")):
+    print(f"=== {label} 各档输出吞吐（tok/s）===")
+    src, dirs = bench_set.pick_single(cfg)
+    if not dirs:
+        print("  （无同卡数据）")
+        print("")
+        continue
+    print(f"  数据来源：{src}")
+    for d in dirs:
+        print(f"    - {d}")
+    rows = bench_set.load_dirs(dirs)
+    for key in bench_set.ORDER:
+        rs = rows.get(key)
+        name = bench_set.TIER_NAME.get(key, str(key))
+        if not rs:
+            print(f"  {name}: —")
+            continue
+        n = len(rs)
+        tp = sum(float(r.get("output_throughput") or 0) for r in rs) / n
+        ttft = sum(float(r.get("mean_ttft_ms") or 0) for r in rs) / n
+        tpot = sum(float(r.get("mean_tpot_ms") or 0) for r in rs) / n
+        done = sum(int(r.get("completed") or 0) for r in rs)
+        fail = sum(int(r.get("failed") or 0) for r in rs)
+        print(f"  {name}: tp={tp:.2f} ttft={ttft:.1f}ms tpot={tpot:.2f}ms "
+              f"completed={done} failed={fail} rounds={n}")
+    print("")
 PY
-  done
-  echo ""
-  echo "=== 首提基线 eager 各档输出吞吐（tok/s）==="
-  EAG=$(ls -d outputs/fullbench_eager_* 2>/dev/null | sort -r | head -1)
-  for f in "$EAG"/round*.jsonl; do
-    [ -f "$f" ] || continue
-    python3 - "$f" <<'PY'
-import json, sys
-try:
-    with open(sys.argv[1], encoding="utf-8") as fh:
-        r = json.loads(fh.readline())
-    print(f"  {sys.argv[1].split('/')[-1]}: tp={r.get('output_throughput')} "
-          f"ttft={r.get('mean_ttft_ms')} tpot={r.get('mean_tpot_ms')} "
-          f"completed={r.get('completed')} failed={r.get('failed')}")
-except Exception as e:
-    print("  读取失败:", sys.argv[1], e)
-PY
-  done
 } > "$WS/tmp/DELIVERY_READY.txt" 2>&1
 
 echo ""
