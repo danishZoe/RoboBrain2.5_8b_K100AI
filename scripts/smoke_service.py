@@ -314,6 +314,21 @@ def main():
     with open(path, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
     print("[smoke] wrote", path)
+    failed = []
+    if health.get("http_status") != 200 or models.get("http_status") != 200:
+        failed.append("health/models")
+    failed.extend(r["case"] for r in task_results if r.get("status") != 200 or not r.get("text") or not r.get("parsed"))
+    if results["F07_multi_image"].get("status") != 200 or not text:
+        failed.append("F07_multi_image")
+    if st.get("status") != 200 or non.get("status") != 200 or not st.get("stream_text") or not same:
+        failed.append("streaming")
+    if mt.get("status") != 200 or not mt.get("text"):
+        failed.append("multi_turn")
+    if any(r.get("accepted") for r in invalid[:3]):
+        failed.append("invalid_inputs")
+    if failed:
+        print("[smoke] FAILED:", ", ".join(failed), file=sys.stderr)
+        return 1
     return 0
 
 

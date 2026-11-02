@@ -6,7 +6,7 @@
 #
 # 与官方 smoke.sh 的差异：官方是纯文本问答；本模型是多模态，
 # 因此以「图文请求」为最小验证单元，并额外覆盖四类任务与异常输入。
-set -uo pipefail   # 不加 -e：某一项失败记录下来，继续跑其余项
+set -euo pipefail   # Fail when a check fails
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$_SCRIPT_DIR/env.sh"
 cd "$REPO_DIR"

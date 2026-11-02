@@ -16,6 +16,7 @@
 set -uo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")" || exit 1
 source ./env.sh
+export BENCH_OUT_DIR="${BENCH_OUT_DIR:-$WORK_DIR/outputs/reproduce_bench_$(date +%Y%m%d_%H%M%S)_$$}"
 
 RC=0
 run_step() {
@@ -62,8 +63,9 @@ fi
 echo
 echo "=============================================================="
 echo "[reproduce] 产物："
-for f in env.log server.log smoke.log verify_result.json bench/summary.md bench/round1.jsonl bench/round2.jsonl; do
+for f in env.log server.log smoke.log verify_result.json "$BENCH_OUT_DIR/summary.md" "$BENCH_OUT_DIR/round1.jsonl" "$BENCH_OUT_DIR/round2.jsonl"; do
   if [ -s "$f" ]; then printf '  %-24s %10s B\n' "$f" "$(wc -c < "$f")"; else printf '  %-24s MISSING\n' "$f"; fi
 done
+echo "[reproduce] benchmark outputs: $BENCH_OUT_DIR"
 echo "[reproduce] 整体退出码 = $RC"
 exit $RC

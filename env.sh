@@ -19,7 +19,7 @@
 # ---------------------------------------------------------------------------
 
 export MODEL_ID="BAAI/RoboBrain2.5-8B-NV"
-export MODEL_PATH="/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV"
+export MODEL_PATH="${MODEL_PATH:-/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV}"
 export SERVED_NAME="robobrain2.5-8b-nv"
 export IMAGE="jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0"
 export FRAMEWORK="vllm"
