@@ -29,7 +29,7 @@ RoboBrain2.5-8B-NV 是基于 **Qwen3-VL** 架构的具身多模态模型，约 8
 
 - 权重：超算互联网 AI 社区模型库（本任务分配路径见第 2 节）
 - 镜像：`jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`
-- 提交仓库：代码仓库 `https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai`（光合开发者社区 GitLab，SSH 地址 `ssh://git@developer.sourcefind.cn:2222/g_exhyd6h6/robobrain2.5_8b_k100ai.git`）；分支 `main` = **最优版**，标签 `baseline-submission` = **首提基线（eager）**；本次交付代码 revision = `bc44891`（完整 `bc44891f178eeb1f765bbc0e4bcf1863eee97225`，379 个跟踪文件，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`；重构前的完整工作区保留在 `workbench` 分支 `e8930a6`）
+- 提交仓库：代码仓库 `https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai`（光合开发者社区 GitLab，SSH 地址 `ssh://git@developer.sourcefind.cn:2222/g_exhyd6h6/robobrain2.5_8b_k100ai.git`）；分支 `main` = **最优版**，标签 `baseline-submission` = **首提基线（eager）**；本次交付代码 revision = `04d1698`（完整 `04d16982cde3cdd0f947d0b7e3e6510e2da661fd`，379 个跟踪文件，逐文件校验值见 `MANIFEST.sha256`，详见 `.revision`；重构前的完整工作区保留在 `workbench` 分支 `e8930a6`）
 
 参考文档：
 

@@ -1,6 +1,6 @@
 # RoboBrain2.5-8B-NV / K100AI (K500SM_AI) 交付 revision
-revision      = bc44891f178eeb1f765bbc0e4bcf1863eee97225
-revision_short= bc44891
+revision      = 04d16982cde3cdd0f947d0b7e3e6510e2da661fd
+revision_short= 04d1698
 recorded_at   = 2026-11-02T12:45:00+08:00
 tracked_files = 379
 manifest      = MANIFEST.sha256
@@ -17,5 +17,5 @@ note          = 仓库根 = 官方提交视图（README.md 即 8 章技术报告
                  换卡后所有收益结论均取自同一张卡上的三套 A/B（scripts/bench_set.py 判定）。
                  六档官方口径表：基线 eager 与最优版均在当前卡（2026-11-01 换卡后）实测。
                  重构前的完整工作区保留在 workbench 分支（e8930a6）。
-revision_note_commit= bc44891f178eeb1f765bbc0e4bcf1863eee97225
-revision_note_short = bc44891
+revision_note_commit= 04d16982cde3cdd0f947d0b7e3e6510e2da661fd
+revision_note_short = 04d1698
