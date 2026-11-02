@@ -29,22 +29,53 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import bench_set  # noqa: E402
+_BASE = Path(__file__).resolve().parent.parent
+
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置。
+
+    优先字面路径 <base>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    保证节点侧行为不变，克隆后的仓库也能跑。
+    """
+    rel = str(rel)
+    p = _BASE / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = _BASE / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
+
 
 WS = bench_set.WS
 ORDER = bench_set.ORDER
 TIER_NAME = bench_set.TIER_NAME
 
 # 跨卡存档（历史实验，永不参与同卡相减）
-ARCHIVE_FIRST = ["submission/bench/round1.jsonl", "submission/bench/round2.jsonl"]
+ARCHIVE_FIRST = [str(_resolve("submission/bench/round1.jsonl")),
+                  str(_resolve("submission/bench/round2.jsonl"))]
 
 COLS = [
     "random_input_len", "random_output_len", "max_concurrency", "completed", "duration",
     "request_throughput", "output_throughput", "total_throughput",
     "mean_ttft_ms", "p99_ttft_ms", "mean_tpot_ms", "p99_tpot_ms", "mean_e2e_latency_ms",
 ]
-HEADER = ("| random_input_len | random_output_len | max_concurrency | completed | duration | "
-          "| request_throughput | output_throughput | total_throughput | mean_ttft_ms | "
-          "| p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |")
+# 表头与分隔行**从 COLS 派生**：早期版本用字符串字面量拼接，拼接处多出一个 "|"
+# → 表头 15 列（2 个空单元格）而数据行 13 列，Markdown 表格渲染失败。
+HEADER = "| " + " | ".join(COLS) + " |"
+SEPARATOR = "| " + " | ".join(["---"] * 3 + ["---:"] * (len(COLS) - 3)) + " |"
+
+
+
+def check_table_shape(lines):
+    """自检：表头 / 分隔行 / 数据行的列数必须一致，否则 Markdown 渲染会退化成纯文本。"""
+    widths = [len(l.split("|")) - 2 for l in lines if l.strip().startswith("|")]
+    if len(set(widths)) > 1:
+        raise SystemExit("ERROR: 表格列数不一致 widths=%s\n%s" % (widths, "\n".join(lines)))
+    return True
 
 
 def load_dir(d):
@@ -113,7 +144,7 @@ def missing_cells_note(rows):
 
 
 def fmt_official(rows):
-    lines = [HEADER, "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    lines = [HEADER, SEPARATOR]
     for key in ORDER:
         rs = rows.get(key)
         if not rs:
@@ -122,6 +153,7 @@ def fmt_official(rows):
         r = rs[-1]  # 记录轮（最后一轮）
         vals = [fmt_val(r.get(c)) for c in COLS]
         lines.append("| " + " | ".join(vals) + " |")
+    check_table_shape(lines)
     return "\n".join(lines)
 
 
@@ -137,6 +169,7 @@ def fmt_rounds(rows):
         failed = sum(r.get("failed", 0) for r in rs)
         lines.append(f"| {key[0]} | {key[1]} | {len(rs)} | {', '.join(f'{v:.2f}' for v in tp)} | "
                      f"{spread:.2f}% | {failed} |")
+    check_table_shape(lines)
     return "\n".join(lines)
 
 
@@ -159,6 +192,7 @@ def fmt_ab(base_rows, cand_rows, base_label, cand_label):
         lines.append(
             f"| {key[0]} | {key[1]} | {bt:.2f} | {ct:.2f} | {(ct/bt-1)*100:+.2f}% | "
             f"{(ctt/btt-1)*100:+.1f}% | {(ctp/btp-1)*100:+.1f}% | {len(b)}/{len(c)} |")
+    check_table_shape(lines)
     return "\n".join(lines)
 
 
@@ -173,7 +207,7 @@ def replace_marker(text: str, name: str, body: str) -> str:
     if begin not in text or end not in text:
         raise SystemExit(f"ERROR: marker pair not found: {name}")
     pat = re.compile(re.escape(begin) + r".*?" + re.escape(end), re.S)
-    block = f"{begin}\n{body}\n{end}"
+    block = f"{begin}\n\n{body}\n\n{end}"
     return pat.sub(lambda _m: block, text, count=1)
 
 
@@ -186,7 +220,7 @@ def replace_block(text: str, body: str) -> str:
 
 def replace_cmp(text: str, body: str) -> str:
     pat = re.compile(r"<!-- TUNING_COMPARISON:BEGIN -->.*?<!-- TUNING_COMPARISON:END -->", re.S)
-    block = f"<!-- TUNING_COMPARISON:BEGIN -->\n{body}\n<!-- TUNING_COMPARISON:END -->"
+    block = f"<!-- TUNING_COMPARISON:BEGIN -->\n\n{body}\n\n<!-- TUNING_COMPARISON:END -->"
     if pat.search(text):
         return pat.sub(lambda _m: block, text, count=1)
     anchor = "<!-- BENCH_SUMMARY:END -->"
@@ -238,7 +272,7 @@ def main():
     ap.add_argument("--baseline-dirs", default="", help="graph 基线目录（逗号分隔；默认取同卡最新一份）")
     ap.add_argument("--first-dirs", default="", help="首提基线 eager 目录（逗号分隔；默认取同卡最新一份）")
     ap.add_argument("--report", type=Path, default=WS / "reports/25_tuning_delivery_20261031.md")
-    ap.add_argument("--readme", type=Path, default=WS / "submission/README.md")
+    ap.add_argument("--readme", type=Path, default=_resolve("submission/README.md"))
     ap.add_argument("--node-label", default=os.environ.get("BENCH_NODE_LABEL", "当前节点（同一张卡）"))
     args = ap.parse_args()
 
@@ -342,8 +376,8 @@ def main():
         "",
         "> 首提基线在 **2026-10-27 节点** 的原始六档记录保留在 `bench/round1.jsonl` /",
         "> `bench/round2.jsonl`（官方口径基准，见第 8 节的节点差异说明）；",
-        "> 最优版的原始数据在 `bench/tuned/`。逐档对比表见 `../reports/tuning_comparison.md`，",
-        "> 完整交付报告见 `../reports/25_tuning_delivery_20261031.md`。",
+        "> 最优版的原始数据在 `bench/tuned/`。逐档对比表见 `reports/tuning_comparison.md`，",
+        "> 完整交付报告见 `reports/25_tuning_delivery_20261031.md`。",
         "> 容器重建会换物理卡，跨卡绝对值不可比，上表只含**同一张卡**上的数据。",
     ]
     txt = replace_cmp(txt, "\n".join(cmp_lines))

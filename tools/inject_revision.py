@@ -11,6 +11,7 @@ Idempotent: 重复执行会替换标记块。
 Usage: python3 tools/inject_revision.py
 """
 import os
+from pathlib import Path
 import re
 import sys
 
@@ -22,6 +23,23 @@ BEGIN = "<!-- REVISION:BEGIN -->"
 END = "<!-- /REVISION -->"
 
 
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置。
+
+    优先字面路径 <ROOT>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    保证节点侧行为不变，克隆后的仓库也能跑。
+    """
+    rel = str(rel)
+    p = ROOT / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = ROOT / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
 def read_revision():
     if not os.path.exists(REV_FILE):
         return None
@@ -42,7 +60,7 @@ def block(rec):
             "| 短 hash | `%s` |\n"
             "| 记录时间 | %s |\n"
             "| 纳入仓库的文件数 | %s |\n"
-            "| 提交包逐文件校验值 | `submission/MANIFEST.sha256` |\n"
+            "| 提交包逐文件校验值 | `MANIFEST.sha256` |\n"
             "| 仓库内容范围 | `%s` |\n\n"
             "> 该 revision 由 `tools/record_revision.sh` 在交付包定稿后生成，"
             "仓库只含交付物（隔离依赖 `envs/pylibs/` 与运行产物 `outputs/`、`logs/` 不入仓库，"
@@ -56,7 +74,7 @@ def block(rec):
 def inject(text, body):
     if BEGIN in text and END in text:
         return re.sub(re.escape(BEGIN) + r".*?" + re.escape(END),
-                      (BEGIN + "\n" + body + END).replace("\\", "\\\\"),
+                      (BEGIN + "\n\n" + body + "\n\n" + END).replace("\\", "\\\\"),
                       text, flags=re.S)
     return text
 
@@ -84,7 +102,7 @@ def main():
         open(p, "w", encoding="utf-8").write(t)
         print("[rev] %s updated" % p)
 
-    p = "submission/README.md"
+    p = str(_resolve("submission/README.md"))
     if os.path.exists(p):
         t = open(p, encoding="utf-8").read()
         rev = rec.get("revision", "-")

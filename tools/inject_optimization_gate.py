@@ -18,6 +18,7 @@ Usage: python3 tools/inject_optimization_gate.py [REPORT]
 import glob
 import json
 import os
+from pathlib import Path
 import re
 import sys
 
@@ -29,6 +30,23 @@ BEGIN = "<!-- OPTGATE:BEGIN -->"
 END = "<!-- /OPTGATE -->"
 
 
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置。
+
+    优先字面路径 <ROOT>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    保证节点侧行为不变，克隆后的仓库也能跑。
+    """
+    rel = str(rel)
+    p = ROOT / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = ROOT / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
 def load_jsonl(p):
     if not os.path.exists(p):
         return []
@@ -48,7 +66,7 @@ def dev(new, old):
 
 
 def baseline(tier):
-    for r in load_jsonl("submission/bench/round2.jsonl"):
+    for r in load_jsonl(str(_resolve("submission/bench/round2.jsonl"))):
         if r.get("random_input_len") == tier[0] and r.get("max_concurrency") == tier[1]:
             return r
     return None
@@ -118,7 +136,7 @@ def build():
         acc = ("官方精度门槛 **BLOCKED**（缺官方 GPU 基线/判分器）；"
                "内部一致性：与 transformers 基线逐坐标 %s"
                % ("%d/%d = %.1f%%" % ar if ar else "未取得"))
-        L.append("| %s/%s 输出吞吐 tok/s | %.2f | %.2f | `(%.2f / %.2f - 1) × 100%%` = **%+.1f%%**（%s） | %s | `outputs/phase5_ab_noneager/%s/` + `submission/bench/round2.jsonl` |"
+        L.append("| %s/%s 输出吞吐 tok/s | %.2f | %.2f | `(%.2f / %.2f - 1) × 100%%` = **%+.1f%%**（%s） | %s | `outputs/phase5_ab_noneager/%s/` + `bench/round2.jsonl` |"
                  % (tier[0], tier[1], btps, atps, atps, btps, d, verdict, acc,
                     os.path.basename(d1) if d1 else "-"))
 
@@ -162,7 +180,7 @@ def build():
 def inject(text, body):
     if BEGIN in text and END in text:
         return re.sub(re.escape(BEGIN) + r".*?" + re.escape(END),
-                      (BEGIN + "\n" + body + END).replace("\\", "\\\\"),
+                      (BEGIN + "\n\n" + body + "\n\n" + END).replace("\\", "\\\\"),
                       text, flags=re.S)
     if BEGIN in text:
         return text.replace(BEGIN, BEGIN + "\n" + body + END, 1)

@@ -22,12 +22,33 @@ import argparse
 import hashlib
 import json
 import os
+from pathlib import Path
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "scripts"))
 
 
+
+_BASE = Path(__file__).resolve().parent.parent
+
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置。
+
+    优先字面路径 <base>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    保证节点侧行为不变，克隆后的仓库也能跑。
+    """
+    rel = str(rel)
+    p = _BASE / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = _BASE / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
 def ensure_dtk_runtime():
     """robo_infer 会 import torch，而 torch 需要 DTK 运行时（libgalaxyhip.so.5）。
     若当前 shell 未加载 /opt/dtk/env.sh，就用 bash 重新 exec 一次。"""
@@ -59,7 +80,7 @@ def sha256(p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--probe", default="outputs/phase5_probe_canonical/probe_result.json")
-    ap.add_argument("--out-dir", default="submission/samples")
+    ap.add_argument("--out-dir", default=str(_resolve("submission/samples")))
     ap.add_argument("--repo-root", default=ROOT)
     args = ap.parse_args()
 

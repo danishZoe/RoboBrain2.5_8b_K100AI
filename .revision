@@ -1,7 +1,7 @@
 # RoboBrain2.5-8B-NV / K100AI (K500SM_AI) 交付 revision
 revision      = bc44891f178eeb1f765bbc0e4bcf1863eee97225
 revision_short= bc44891
-recorded_at   = 2026-11-02T12:20:00+08:00
+recorded_at   = 2026-11-02T12:45:00+08:00
 tracked_files = 379
 manifest      = MANIFEST.sha256
 repo_layout   = README.md env.sh env_check.sh requirements-extra.txt run.sh smoke.sh

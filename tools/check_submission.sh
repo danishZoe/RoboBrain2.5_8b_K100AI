@@ -155,6 +155,18 @@ else
 fi
 
 echo
+echo "=== 7. 报告 Markdown 渲染自检（表格列数 / 注释块空行 / <table> 数量）==="
+if command -v python3 >/dev/null 2>&1 && [ -f tools/check_report_render.py ]; then
+  if python3 tools/check_report_render.py README.md; then
+    ok "README 表格渲染自检通过"
+  else
+    bad "README 表格渲染自检未通过（表格会退化成纯文本，见 tools/check_report_render.py）"
+  fi
+else
+  warn "跳过：缺少 python3 或 tools/check_report_render.py"
+fi
+
+echo
 echo "=============================================="
 echo "FAIL=$FAIL  WARN=$WARN"
 [ "$FAIL" -eq 0 ] && echo "提交包自检通过" || echo "提交包自检未通过"

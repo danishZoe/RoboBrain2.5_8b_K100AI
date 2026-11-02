@@ -49,6 +49,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from pathlib import Path
 import re
 import sys
 from typing import Any, Dict, List, Optional
@@ -82,6 +83,26 @@ BLOCKS = {
 # =============================================================================
 # 取数
 # =============================================================================
+
+_BASE = Path(__file__).resolve().parent.parent
+
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置。
+
+    优先字面路径 <base>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    保证节点侧行为不变，克隆后的仓库也能跑。
+    """
+    rel = str(rel)
+    p = _BASE / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = _BASE / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
 def _load(path: str) -> Optional[Dict[str, Any]]:
     if not os.path.exists(path):
         return None
@@ -437,7 +458,7 @@ def replace_block(text: str, begin: str, end: str, legacy: str, body: str):
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench-root", default=os.path.join(ROOT, "outputs/bench_public"))
-    ap.add_argument("--readme", default=os.path.join(ROOT, "submission/README.md"))
+    ap.add_argument("--readme", default=str(_resolve("submission/README.md")))
     args = ap.parse_args()
     root = args.bench_root
 

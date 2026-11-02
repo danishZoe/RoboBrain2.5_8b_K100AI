@@ -13,6 +13,7 @@ Usage: python3 tools/inject_clean_repro.py [REPORT] [REPRO_DIR]
 """
 import json
 import os
+from pathlib import Path
 import re
 import sys
 
@@ -22,6 +23,25 @@ BEGIN = "<!-- CLEAN_REPRO:BEGIN -->"
 END = "<!-- CLEAN_REPRO:END -->"
 
 
+
+_BASE = Path(__file__).resolve().parent.parent
+
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置（基准 = 脚本自身所在根）。
+
+    优先字面路径 <base>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    """
+    rel = str(rel)
+    p = _BASE / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = _BASE / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
 def load_jsonl(p):
     if not os.path.exists(p):
         return []
@@ -36,7 +56,7 @@ def load_jsonl(p):
 
 def build():
     repro = load_jsonl(os.path.join(REPRO, "repro_4096_c1.jsonl"))
-    base = [r for r in load_jsonl("submission/bench/round2.jsonl")
+    base = [r for r in load_jsonl(str(_resolve("submission/bench/round2.jsonl")))
             if r.get("random_input_len") == 4096 and r.get("max_concurrency") == 1]
     vp = os.path.join(REPRO, "verify_result.json")
     vstatus, vreason = "-", ""

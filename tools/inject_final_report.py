@@ -15,6 +15,7 @@ Usage: python3 tools/inject_final_report.py [REPORT]
 import glob
 import json
 import os
+from pathlib import Path
 import re
 import sys
 
@@ -28,6 +29,23 @@ TUNE_BEGIN = "<!-- FINAL_TUNING_TABLE -->"
 TUNE_END = "<!-- /FINAL_TUNING_TABLE -->"
 
 
+
+def _resolve(rel):
+    """解析相对路径到实际存在的位置。
+
+    优先字面路径 <ROOT>/rel（节点工作目录布局：submission/...），
+    再回落去掉 ``submission/`` 前缀（仓库提交视图布局：提交包已上提到根）。
+    保证节点侧行为不变，克隆后的仓库也能跑。
+    """
+    rel = str(rel)
+    p = ROOT / rel
+    if p.exists():
+        return p
+    if rel.startswith("submission/"):
+        alt = ROOT / rel[len("submission/"):]
+        if alt.exists():
+            return alt
+    return p
 def load_jsonl(p):
     if not os.path.exists(p):
         return []
@@ -47,19 +65,20 @@ def dev_pct(new, old):
 
 
 def baseline(tier):
-    for r in load_jsonl("submission/bench/round2.jsonl"):
+    for r in load_jsonl(str(_resolve("submission/bench/round2.jsonl"))):
         if r.get("random_input_len") == tier[0] and r.get("max_concurrency") == tier[1]:
             return r
     return None
 
 
 def bench_table():
-    p = "submission/bench/summary.md"
+    p = str(_resolve("submission/bench/summary.md"))
     if not os.path.exists(p):
         return "（`submission/bench/summary.md` 尚未生成）\n"
     with open(p, encoding="utf-8") as f:
         table = f.read().strip()
-    rows = load_jsonl("submission/bench/round1.jsonl") + load_jsonl("submission/bench/round2.jsonl")
+    rows = (load_jsonl(str(_resolve("submission/bench/round1.jsonl")))
+            + load_jsonl(str(_resolve("submission/bench/round2.jsonl"))))
     fails = sum(r.get("failed", 0) or 0 for r in rows)
     done = sum(r.get("completed", 0) or 0 for r in rows)
     dev = []
@@ -72,7 +91,7 @@ def bench_table():
                 dev.append(abs(tps[1] - tps[0]) / tps[0] * 100.0)
     maxdev = max(dev) if dev else None
     notes = []
-    notes.append("- 官方 13 列格式，原样取自 `submission/bench/summary.md`（记录轮 = 第 2 轮）。")
+    notes.append("- 官方 13 列格式，原样取自 `bench/summary.md`（记录轮 = 第 2 轮）。")
     notes.append("- 两轮共完成 **%d** 个请求，失败 **%d** 个。" % (done, fails))
     if maxdev is not None:
         notes.append("- 轮间最大偏差 **%.1f%%**（输出吞吐），重复性良好。" % maxdev)
@@ -249,9 +268,10 @@ def tuning_table():
 def inject(text, begin, end, body):
     if begin in text and end in text:
         return re.sub(re.escape(begin) + r".*?" + re.escape(end),
-                      (begin + "\n" + body + end).replace("\\", "\\\\"), text, flags=re.S)
+                      (begin + "\n\n" + body + "\n\n" + end).replace("\\", "\\\\"),
+                      text, flags=re.S)
     if begin in text:
-        return text.replace(begin, begin + "\n" + body + end, 1)
+        return text.replace(begin, begin + "\n\n" + body + "\n\n" + end, 1)
     return text
 
 

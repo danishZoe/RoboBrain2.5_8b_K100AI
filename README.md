@@ -561,6 +561,7 @@ Table 3（3D 空间 5 项，其中 Robo-Dopamine 为可选时序扩展，需独�
 
 <!-- PUBLIC_BENCH_TABLE:BEGIN -->
 
+
 **主指标一览（主口径，对外上报口径）**：
 
 | 基准 | 主指标 | 分母 / 口径 | 论文参考 | 本次主口径 | 差值 |
@@ -586,6 +587,7 @@ RefSpatial 变化率 0.5833、TraceSpatial 0.75（长链推理固有噪声），
 离线重判分复现（`bench_public/rescore.py`）比较指标数 **12**、不一致 **0** ✅。
 
 <!-- /PUBLIC_BENCH_TABLE -->
+
 
 > ⚠️ TraceSpatial 3D 数字以上方总表 + §6.2.5 的**最大可行覆盖口径**为准
 > （98/99 分母；自动生成表中的 96 分母为兜底口径历史值，根因见 §6.2.5 勘误）。
@@ -621,6 +623,7 @@ RefSpatial 变化率 0.5833、TraceSpatial 0.75（长链推理固有噪声），
 
 <!-- UPSCALE_TABLE:BEGIN -->
 
+
 | 缩放策略 | Acc(ADE20K) | Acc(COCO) | Acc_2D | Δ vs canonical |
 |---|---|---|---|---|
 | `canonical_png`（同会话对照） | 63.74 | 78.25 | 71.00 | — |
@@ -629,12 +632,14 @@ RefSpatial 变化率 0.5833、TraceSpatial 0.75（长链推理固有噪声），
 
 <!-- /UPSCALE_TABLE -->
 
+
 * **机制**：`shortest_edge=65536` → 小图只有 64 个视觉 token；2× 上采样让小目标占到更多 token，
   与「洗碗机漏检」这类失分机制一致。逐题配对符号检验 p = 1.27e-06，
   同配置两次运行的噪声底只有 0.29 pt（不显著）⇒ 增益是真的。
 * **全量诊断**（`up2_png`，2638 题，47.3 min，2638/2638 终态 `ok`）：
 
 <!-- UPSCALE_FULL_TABLE:BEGIN -->
+
 
 | 指标 | 主口径 `canonical_png` | `up2_png`（诊断口径） | Δ |
 |---|---|---|---|
@@ -645,6 +650,7 @@ RefSpatial 变化率 0.5833、TraceSpatial 0.75（长链推理固有噪声），
 | **CV_score（官方综合分）** | **88.12** | **88.78** | **+0.66** |
 
 <!-- /UPSCALE_FULL_TABLE -->
+
 
 3D 分支反而 −0.50 pt；官方综合分净 **+0.66 pt**，只有 6.46 pt 缺口的**约 1/10**
 ⇒ **6.46 pt 缺口不可能由输入分辨率解释**，必须回到权重/训练数据一侧解决。
@@ -792,7 +798,8 @@ python -m sglang.bench_serving \
 第二次结果（`bench/summary.md` 原文）：
 
 <!-- BENCH_SUMMARY:BEGIN -->
-| random_input_len | random_output_len | max_concurrency | completed | duration | | request_throughput | output_throughput | total_throughput | mean_ttft_ms | | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
+
+| random_input_len | random_output_len | max_concurrency | completed | duration | request_throughput | output_throughput | total_throughput | mean_ttft_ms | p99_ttft_ms | mean_tpot_ms | p99_tpot_ms | mean_e2e_latency_ms |
 | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | 4096 | 1024 | 1 | 8 | 285.29 | 0.03 | 28.71 | 206.98 | 1411.01 | 1427.87 | 33.48 | 33.67 | 35660.08 |
 | 4096 | 1024 | 8 | 16 | 144.12 | 0.11 | 113.68 | 820.13 | 10346.68 | 10402.20 | 60.30 | 60.37 | 72028.57 |
@@ -802,7 +809,9 @@ python -m sglang.bench_serving \
 | 16384 | 1024 | 64 | 128 | 13480.76 | 0.01 | 9.72 | 192.86 | 4062229.71 | 6026783.45 | 1395.95 | 1826.13 | 5490284.66 |
 <!-- BENCH_SUMMARY:END -->
 
+
 <!-- TUNING_COMPARISON:BEGIN -->
+
 ### 7.1 与基线的同口径对比
 
 **同卡 A/B：首提基线 eager → 最优版**（当前节点（同一张卡），同一负载、同一客户端；赛事口径的正式对比）
@@ -830,6 +839,7 @@ python -m sglang.bench_serving \
 > 完整交付报告见 `reports/25_tuning_delivery_20261031.md`。
 > 容器重建会换物理卡，跨卡绝对值不可比，上表只含**同一张卡**上的数据。
 <!-- TUNING_COMPARISON:END -->
+
 
 > **读表要点（单卡口径）**
 > - `output_throughput` 是**输出** token 吞吐；`total_throughput` 另含输入 token。
