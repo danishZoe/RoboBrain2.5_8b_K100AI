@@ -61,31 +61,16 @@ bash smoke.sh
 
 ## 6. 精度测评
 
-精度入口为 `verify.py`，可先运行判分逻辑自检：
+公开精度测试脚本 `eval.sh` 按指定顺序运行**完整数据集**，默认运行 CV-Bench（2638 题）和 RefSpatial（Location + Placement，共 200 题）：
 
 ```bash
-python3 verify.py --selfcheck
-source ./env.sh
-python3 verify.py
+bash eval.sh cvbench refspatial   # 两个数据集依次运行
+# 也可只运行其中一个：bash eval.sh cvbench 或 bash eval.sh refspatial
 ```
 
-`--selfcheck` 只检查判分逻辑，不运行模型；`verify.py` 的当前结果见 [verify_result.json](verify_result.json)。本模型暂无可用的赛事官方精度基线，不能据此报告官方一致率或判定官方精度通过。
+脚本在镜像内查找数据及上游判分代码，原始预测、判分结果和日志写入 `$WORK_DIR/outputs/public_eval_*`。数据集按顺序执行，每个数据集内部默认并发 16；应先启动服务、停止压测。该脚本是仓库提供的公开基准运行入口，不是赛事方指定评测脚本。完整两项运行在新实例上尚未验证；TraceSpatial 等其他基准暂不包含在此入口。
 
-公开 CV-Bench 的三题运行检查（先启动服务，避免与压测同时运行）：
-
-```bash
-source ./env.sh
-mkdir -p "$WORK_DIR/third_party/upstream_eval"
-[ -e "$WORK_DIR/third_party/benchmarks" ] || ln -s /opt/robo-image-v1/eval_data/benchmarks "$WORK_DIR/third_party/benchmarks"
-[ -e "$WORK_DIR/third_party/upstream_eval/FlagEvalMM" ] || ln -s /opt/robo-image-v1/images_build/upstream_eval/FlagEvalMM "$WORK_DIR/third_party/upstream_eval/FlagEvalMM"
-python3 bench_public/run_cv_bench.py --limit 3 --concurrency 1 \
-  --out-dir "$WORK_DIR/outputs/cvbench_check" \
-  --img-dir "$WORK_DIR/outputs/cvbench_check_images" --no-resume
-```
-
-结果保存在 `outputs/cvbench_check/`，检查 `predictions/cvbench.jsonl`、`cv_bench_official_result.json` 和 `summary.json` 中的错误信息。三题不是完整基准；脚本可能在判分失败时仍返回 0，应检查输出文件和日志。该命令使用镜像内公开数据和上游判分代码；旧实例已验证三题推理与判分，新实例因正在压测尚未完整复测。
-
-以下是公开基准实测，用于说明任务质量，评测口径和分母见 [公开基准报告](reports/16_public_bench_results.md)：
+`verify.py` 保留为仓库原有精度检查入口，当前没有可用的赛事官方精度基线，不能报告官方一致率或判定官方精度通过。以下是公开基准实测，用于说明任务质量，评测口径和分母见 [公开基准报告](reports/16_public_bench_results.md)：
 
 | 公开基准 | 结果 | 口径说明 |
 | --- | ---: | --- |
@@ -96,7 +81,7 @@ python3 bench_public/run_cv_bench.py --limit 3 --concurrency 1 \
 | RoboSpatial-Home | 62.0，350 题 | 上游判分 |
 | Q-Spatial-Bench | 62.7%，101 题 | 3 次均值；单次 60.4%–65.4% |
 
-原始预测和判分文件在镜像 `ref_out/accuracy/`，三套公开数据集在 `eval_data/benchmarks/`；来源索引为 `ref_out/README_traceability.md`。TraceSpatial 不同表的分母和口径尚需逐项核对，不在此合并为单一成绩。三题 CV-Bench 小样本只用于验证脚本可运行，不代表完整基准得分。
+原始预测和判分文件在镜像 `ref_out/accuracy/`，三套公开数据集在 `eval_data/benchmarks/`；来源索引为 `ref_out/README_traceability.md`。TraceSpatial 不同表的分母和口径尚需逐项核对，不在此合并为单一成绩。
 
 ## 7. 性能参考
 
