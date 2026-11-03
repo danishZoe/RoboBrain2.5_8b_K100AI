@@ -11,8 +11,9 @@ if [ "$#" -eq 0 ]; then set -- cvbench refspatial; fi
 for name in "$@"; do
   case "$name" in cvbench|refspatial) ;; *) echo "Unsupported dataset: $name" >&2; exit 2;; esac
 done
-source ./env.sh
 REPO_DIR="$(pwd)"
+export WORK_DIR="${WORK_DIR:-$REPO_DIR}"
+source ./env.sh
 IMAGE_ROOT="${IMAGE_ROOT:-/opt/robo-image-v1}"
 test -f "$IMAGE_ROOT/prepare.sh" || { echo "Missing $IMAGE_ROOT/prepare.sh" >&2; exit 1; }
 bash "$IMAGE_ROOT/prepare.sh" "$REPO_DIR" "$WORK_DIR"
