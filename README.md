@@ -8,8 +8,15 @@
 
 - 模型：[SCNet AI 社区](https://www.scnet.cn/ui/aihub/models/sugon_scnet/RoboBrain2.5-8B-NV)
 - 基础镜像：`appstore.scnet.cn:5000/aihub/dcu/zhr5535/jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`；本次保存的镜像地址和版本 **待填写**。
-- 代码：[GitLab 仓库](https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai)；便携复现修改位于 `codex/repro-portable-20261103`，以实际提交版本为准。
+- 代码：[GitLab 仓库](https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai)；默认使用 `main`，以实际提交版本为准。
 - 上游：[RoboBrain2.5 模型说明](https://huggingface.co/BAAI/RoboBrain2.5-8B-NV)。
+
+克隆并进入仓库：
+
+```bash
+git clone https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai.git
+cd robobrain2.5_8b_k100ai
+```
 
 主要入口：`env.sh` 配置环境，`run.sh` 启动服务，`smoke.sh` 验证图文，`verify.py` 执行精度检查，`bench.sh` 测试性能。原始日志在 `bench/`，公开评测细节在 `reports/`；完整历史说明见 [归档报告](docs/README-full-20261103.md)。
 
