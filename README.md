@@ -61,7 +61,31 @@ bash smoke.sh
 
 ## 6. 精度测评
 
-本模型暂无可用的赛事官方精度基线，因此不能报告官方一致率或判定官方精度通过。以下是公开基准实测，用于说明任务质量，评测口径和分母见 [公开基准报告](reports/16_public_bench_results.md)：
+精度入口为 `verify.py`，可先运行判分逻辑自检：
+
+```bash
+python3 verify.py --selfcheck
+source ./env.sh
+python3 verify.py
+```
+
+`--selfcheck` 只检查判分逻辑，不运行模型；`verify.py` 的当前结果见 [verify_result.json](verify_result.json)。本模型暂无可用的赛事官方精度基线，不能据此报告官方一致率或判定官方精度通过。
+
+公开 CV-Bench 的三题运行检查（先启动服务，避免与压测同时运行）：
+
+```bash
+source ./env.sh
+mkdir -p "$WORK_DIR/third_party/upstream_eval"
+[ -e "$WORK_DIR/third_party/benchmarks" ] || ln -s /opt/robo-image-v1/eval_data/benchmarks "$WORK_DIR/third_party/benchmarks"
+[ -e "$WORK_DIR/third_party/upstream_eval/FlagEvalMM" ] || ln -s /opt/robo-image-v1/images_build/upstream_eval/FlagEvalMM "$WORK_DIR/third_party/upstream_eval/FlagEvalMM"
+python3 bench_public/run_cv_bench.py --limit 3 --concurrency 1 \
+  --out-dir "$WORK_DIR/outputs/cvbench_check" \
+  --img-dir "$WORK_DIR/outputs/cvbench_check_images" --no-resume
+```
+
+结果保存在 `outputs/cvbench_check/`，检查 `predictions/cvbench.jsonl`、`cv_bench_official_result.json` 和 `summary.json` 中的错误信息。三题不是完整基准；脚本可能在判分失败时仍返回 0，应检查输出文件和日志。该命令使用镜像内公开数据和上游判分代码；旧实例已验证三题推理与判分，新实例因正在压测尚未完整复测。
+
+以下是公开基准实测，用于说明任务质量，评测口径和分母见 [公开基准报告](reports/16_public_bench_results.md)：
 
 | 公开基准 | 结果 | 口径说明 |
 | --- | ---: | --- |
