@@ -5,7 +5,7 @@
 在可写工作目录中准备环境：
 
 ```bash
-export WORK_DIR=/root/private_data/workspace/robo/repro_run
+export WORK_DIR="$PWD/.runtime"
 export MODEL_PATH=/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV
 export VLLM_NO_USAGE_STATS=1
 bash /opt/robo-image-v1/prepare.sh "$PWD" "$WORK_DIR"

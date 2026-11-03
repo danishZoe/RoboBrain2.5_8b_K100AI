@@ -1,6 +1,7 @@
 # 隔离依赖与运行产物：不进交付仓库（体积大、可由脚本重新生成）
 # 注意：根级 envs/ 是提交包的一部分（sitecustomize 垫片），只排除隔离依赖 pylibs/
 /envs/pylibs/
+/.runtime/
 cache/
 tmp/
 outputs/

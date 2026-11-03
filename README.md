@@ -43,10 +43,10 @@ cd robobrain2.5_8b_k100ai
 
 ## 4. 服务启动脚本
 
-先检查设备分配和占用，挂载模型，克隆本仓库并进入代码目录。在本次系统盘环境中：
+先检查设备分配和占用，挂载模型，克隆本仓库并进入代码目录。在本次系统盘环境中，工作目录使用代码目录下的 `.runtime/`：
 
 ```bash
-export WORK_DIR=/root/private_data/workspace/robo/repro_run
+export WORK_DIR="$PWD/.runtime"
 export MODEL_PATH=/public/home/scnjz2s4uc/SothisAI/model/Aihub/RoboBrain2.5-8B-NV/main/RoboBrain2.5-8B-NV
 export VLLM_NO_USAGE_STATS=1
 bash /opt/robo-image-v1/prepare.sh "$PWD" "$WORK_DIR"
@@ -75,7 +75,7 @@ bash eval.sh cvbench refspatial   # 两个数据集依次运行
 # 也可只运行其中一个：bash eval.sh cvbench 或 bash eval.sh refspatial
 ```
 
-脚本在镜像内查找数据及上游判分代码，默认以代码目录为工作目录，原始预测、判分结果和日志写入代码目录的 `outputs/public_eval_*`；如需另选工作目录，可先设置 `WORK_DIR`。数据集按顺序执行，每个数据集内部默认并发 16；应先启动服务、停止压测。该脚本是仓库提供的公开基准运行入口，不是赛事方指定评测脚本。完整两项运行在新实例上尚未验证；TraceSpatial 等其他基准暂不包含在此入口。
+脚本在镜像内查找数据及上游判分代码；未设置 `WORK_DIR` 时，输出在代码目录的 `outputs/public_eval_*`。如果沿用上面服务启动时设置的 `WORK_DIR`，输出则在 `.runtime/outputs/public_eval_*`。数据集按顺序执行，每个数据集内部默认并发 16；应先启动服务、停止压测。该脚本是仓库提供的公开基准运行入口，不是赛事方指定评测脚本。完整两项运行在新实例上尚未验证；TraceSpatial 等其他基准暂不包含在此入口。
 
 `verify.py` 保留为仓库原有精度检查入口，当前没有可用的赛事官方精度基线，不能报告官方一致率或判定官方精度通过。以下是公开基准实测，用于说明任务质量，评测口径和分母见 [公开基准报告](reports/16_public_bench_results.md)：
 
