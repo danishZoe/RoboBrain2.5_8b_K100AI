@@ -7,7 +7,7 @@
 权重由运行方挂载；代码从 GitLab 获取；运行环境使用 SCNet 基础镜像及本次整理的系统盘内容。当前实例已完成图文 smoke 和性能测试，**保存镜像后重新创建实例的复现尚未验证**。
 
 - 模型：[SCNet AI 社区](https://www.scnet.cn/ui/aihub/models/sugon_scnet/RoboBrain2.5-8B-NV)
-- 基础镜像：`appstore.scnet.cn:5000/aihub/dcu/zhr5535/jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0`；本次保存的镜像地址和版本 **待填写**。
+- 基础镜像：`/aihub/dcu/acoaeakan4/robobrain2.5_8b_k100ai_vllm0.15.1:v1.0`（基于 `appstore.scnet.cn:5000/aihub/dcu/zhr5535/jupyter-sglang5.12-ubuntu22.04-dtk26.04-py3.10-qwen3.6:v1.0` 保存）。
 - 代码：[GitLab 仓库](https://developer.sourcefind.cn/codes/g_exhyd6h6/robobrain2.5_8b_k100ai)；默认使用 `main`，以实际提交版本为准。
 - 上游：[RoboBrain2.5 模型说明](https://huggingface.co/BAAI/RoboBrain2.5-8B-NV)。
 
